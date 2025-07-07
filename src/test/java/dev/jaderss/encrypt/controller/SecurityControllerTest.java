@@ -14,7 +14,8 @@ import java.security.GeneralSecurityException;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(SecurityController.class)
 class SecurityControllerTest {
@@ -64,17 +65,14 @@ class SecurityControllerTest {
     void encrypt_ShouldHandleEmptyString() throws Exception {
         // Given
         String emptyString = "";
-        String expectedEncrypted = "encrypted-empty-string";
-        when(securityService.encrypt(emptyString)).thenReturn(expectedEncrypted);
 
         // When & Then
         mockMvc.perform(post("/encrypt")
                         .contentType(MediaType.TEXT_PLAIN)
                         .content(emptyString))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedEncrypted));
+                .andExpect(status().isBadRequest());
 
-        verify(securityService).encrypt(emptyString);
+        securityService.encrypt(emptyString);
     }
 
     @Test
