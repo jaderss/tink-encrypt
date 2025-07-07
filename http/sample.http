@@ -1,0 +1,15 @@
+### Encrypt plain text
+POST http://localhost:8080/encrypt
+Content-Type: text/plain
+
+Hello World!
+
+### Decrypt cipher text
+POST http://localhost:8080/decrypt
+Content-Type: text/plain
+
+ATZwaYkDzds0ltoZ3WuPFVF0/bvdufgvnK6fapQwWe2iv2GK+m+nPiuj3/q4
+
+### Generate new encryption key
+POST http://localhost:8080/key/generate
+Content-Type: text/plain

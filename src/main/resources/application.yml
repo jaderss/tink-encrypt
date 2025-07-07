@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: encrypt
+
+encrypt:
+    key: REDACTED_KEYSET
