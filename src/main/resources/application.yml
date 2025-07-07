@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: encrypt
+
+encrypt:
+    key: CInTwbMDEmQKWAowdHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUuY3J5cHRvLnRpbmsuQWVzR2NtS2V5EiIaIMhYGGgFwmnfeKhspGvTr2SneK6N4yhNCJUMKIi5C1cCGAEQARiJ08GzAyAB
