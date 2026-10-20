@@ -1,68 +1,62 @@
-# Encrypt API
+# tink-encrypt
 
-A Spring Boot REST API service for text encryption and decryption using Google Tink cryptography library with AES256-GCM encryption.
+[![CI](https://github.com/jaderss/tink-encrypt/actions/workflows/ci.yml/badge.svg)](https://github.com/jaderss/tink-encrypt/actions/workflows/ci.yml)
 
-## Features
+An encryption service for sensitive fields, such as SSNs and account numbers, built on Google Tink, Spring Boot 4.1 and Java 25. Callers send a value plus the tenant and field it belongs to; the service returns a ciphertext that only decrypts under that same tenant and field.
 
-- **Text Encryption**: Encrypt plain text using AES256-GCM algorithm
-- **Text Decryption**: Decrypt encrypted text back to plain text
-- **Context binding**: Ciphertext is bound to a tenant and field and fails to decrypt anywhere else
-- **Key rotation**: New primary keys without breaking existing ciphertext, plus a re-encrypt endpoint
-- **Per-tenant key derivation**: HKDF through the Java 25 KDF API
-- **Envelope encryption**: Keyset wrapped by an AWS KMS key under the `aws` profile
-- **Hybrid encryption**: HPKE public key for client-side encryption, exportable as PEM
-- **Fast startup**: Measured startup with the Java 25 AOT cache
-- **Secure**: Uses Google Tink cryptography library for robust security
-- **RESTful API**: Simple HTTP endpoints for easy integration
-- **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
+## What it does
 
-## Technology Stack
+- Encrypts and decrypts with AES-256-GCM through Tink, with the tenant and field bound to every ciphertext as associated data.
+- Rotates keys without breaking stored data, and re-encrypts old ciphertext under the newest key without returning the plaintext.
+- Keeps the keyset out of configuration in production by wrapping it with an AWS KMS key.
+- Accepts values encrypted client-side to an HPKE public key and stores them in the same format.
+- Derives per-tenant keys with HKDF through the Java 25 KDF API.
+- Reports every failure as RFC 9457 Problem Details, carries a request id in a `ScopedValue`, and emits a JFR event per operation.
 
-- **Java 25**
-- **Spring Boot 4.1**
-- **Google Tink 1.24** (Cryptography library)
-- **Maven** (Build tool, wrapper included)
-- **Spotless** with Palantir Java Format
+## Threat model
 
-## Prerequisites
+It protects against:
 
-- Java 25
-- Docker, for the LocalStack tests
+- A leaked database or backup. Stored values are ciphertext, and the keys are not stored with them.
+- Ciphertext moved between records. A value encrypted for one tenant or field fails to decrypt for any other.
+- A leaked environment or config file, when the `aws` profile is used. The keyset there is wrapped by a KMS key that never leaves KMS.
+- Plaintext exposure between a client and the service, when clients encrypt to the hybrid public key.
 
-## Installation & Setup
+It does not protect against:
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd encrypt
-   ```
+- Anyone who can call `/decrypt`. The service has no authentication; it belongs behind a gateway that authenticates callers and decides who may decrypt which tenant's data.
+- A compromised host. The running process holds the data keys in memory.
+- Length leaks. A ciphertext reveals the approximate length of its plaintext.
+- Lost keys. Data encrypted under a key that is destroyed is gone for good.
 
-2. **Build the project**
-   ```bash
-   ./mvnw clean install
-   ```
+## Run it
 
-3. **Run the application**
-   ```bash
-   ./mvnw spring-boot:run
-   ```
-
-The application will start on `http://localhost:8080`
-
-## Configuration
-
-The service reads a base64 Tink keyset from the `ENCRYPT_KEYSET` environment variable. It refuses to start without one. No keyset is committed to the repository.
+Java 25 is required. Docker is needed only for the test suite.
 
 ```bash
 export ENCRYPT_KEYSET=$(scripts/keyset.sh new)
 ./mvnw spring-boot:run
 ```
 
-`.env.example` lists the variable. Tests generate their own keyset and need no setup.
+```bash
+curl -X POST http://localhost:8080/encrypt \
+  -H "Content-Type: application/json" \
+  -d '{"context":{"tenantId":"acme","field":"ssn"},"plaintext":"123-45-6789"}'
+```
 
-## API Endpoints
+`http/sample.http` holds the same calls for IntelliJ IDEA or the VS Code REST Client, chaining the ciphertext from encrypt into decrypt and re-encrypt.
 
-Both endpoints take and return JSON. Every call carries an encryption context: a tenant id and a field name. The context is bound to the ciphertext as AEAD associated data, so a ciphertext only decrypts with the exact context it was encrypted under. Copying an encrypted SSN from one tenant's record to another, or from the `ssn` field to the `email` field, makes it undecryptable.
+| Profile | Adds | Variables |
+|---|---|---|
+| default | Cleartext keyset, for local use | `ENCRYPT_KEYSET` |
+| `aws` | Keyset wrapped by an AWS KMS key | `ENCRYPT_KMS_KEY_ARN`, `ENCRYPT_KMS_ENCRYPTED_KEYSET` |
+| `hybrid` | HPKE public key and client-side import | `ENCRYPT_HYBRID_KEYSET` |
+
+`.env.example` lists every variable. The service refuses to start unless exactly one of the cleartext or KMS key sources is set.
+
+## API
+
+All endpoints take and return JSON. Every call carries an encryption context: a tenant id and a field name. The context is bound to the ciphertext as AEAD associated data, so a ciphertext only decrypts with the exact context it was encrypted under. Copying an encrypted SSN from one tenant's record to another, or from the `ssn` field to the `email` field, makes it undecryptable.
 
 Both parts of the context must match `[A-Za-z0-9_.-]{1,64}`. A request with a missing or invalid context is rejected with `400`.
 
@@ -110,7 +104,7 @@ curl -X POST http://localhost:8080/reencrypt \
 {"ciphertext":"..."}
 ```
 
-## Errors, request ids and telemetry
+### Errors, request ids and telemetry
 
 Every error is an RFC 9457 Problem Details body with content type `application/problem+json`.
 
@@ -148,7 +142,9 @@ dev.jaderss.encrypt.Crypto {
 }
 ```
 
-## Key rotation
+## Key management
+
+### Rotation
 
 A Tink keyset holds several keys. The primary key encrypts; every key in the set can decrypt, because each ciphertext starts with the id of the key that produced it. Rotation never breaks existing data.
 
@@ -164,7 +160,7 @@ A Tink keyset holds several keys. The primary key encrypts; every key in the set
 
 `rotate` and `retire` read the current keyset from `ENCRYPT_KEYSET` and print the new one.
 
-## Envelope encryption with AWS KMS
+### Envelope encryption with AWS KMS
 
 The keyset holds the data keys. In production it should never sit in an environment variable in cleartext. Under the `aws` profile the service takes the keyset wrapped by an AWS KMS key, the key-encryption key, and asks KMS to unwrap it once at startup. Requests never call KMS, and the data keys never exist outside the process in cleartext.
 
@@ -236,6 +232,17 @@ Tink has its own derivation primitive, `KeysetDeriver`, built on a PRF-based key
 
 Use the JDK API when the derived key has to match a system outside Tink, when a protocol specifies HKDF directly, or when you want no crypto library at all. Use Tink's `KeysetDeriver` when the derived keys stay inside Tink, because you get key ids, rotation and Tink's safe defaults without writing the glue code this component needs.
 
+## Modern Java features and why they are here
+
+| Feature | JEP | Since | Where | Why |
+|---|---|---|---|---|
+| Key Derivation Function API | 510 | 25 | `kdf/TenantKeyDerivation` | HKDF from the JDK, with no extra library, for per-tenant keys |
+| Scoped values | 506 | 25 | `request/RequestContext` | Request id without a `ThreadLocal`, so nothing leaks between requests or needs cleanup |
+| AOT cache with one-step training | 514, 515 | 25 | `scripts/startup-benchmark.sh` | Startup in about a third of the fat jar's time |
+| PEM encodings (preview) | 470 | 25, preview | `src/preview`, `-Ppem-preview` | Standard PEM for the hybrid public key, kept out of the main build |
+| Virtual threads | 444 | 21 | `spring.threads.virtual.enabled` | Request threads that cost almost nothing while a request blocks |
+| Records and pattern matching for `instanceof` | 395, 394 | 16 | Request and response types, `EncryptionContext`, `PublicKeyPem` | Immutable values that validate themselves when created |
+
 ## Startup with the AOT cache
 
 Java 25 can build an ahead-of-time cache in one training run (JEP 514): `-XX:AOTCacheOutput` records which classes the application loads and links, and since JEP 515 also the method profiles gathered during that run. Later runs start from the cache instead of loading and linking those classes again.
@@ -259,52 +266,32 @@ scripts/startup-benchmark.sh
 RUNS=20 scripts/startup-benchmark.sh
 ```
 
-## Testing
+## Build and test
 
-The project includes sample HTTP requests in `http/sample.http` that can be used with HTTP clients like IntelliJ IDEA, VS Code REST Client, or similar tools.
-
-### Running Tests
 ```bash
-./mvnw test
+./mvnw verify
+./mvnw verify -Ppem-preview
+./mvnw spotless:apply
 ```
 
-## Security Considerations
+`verify` runs the tests, including the LocalStack ones, and fails on formatting that does not match Palantir Java Format. GitHub Actions runs both builds and a gitleaks scan of the full history on every push.
 
-- **Key Management**: The keyset comes from the `ENCRYPT_KEYSET` environment variable and is created and rotated offline with `scripts/keyset.sh`. The service never generates or returns keys over HTTP.
-- **HTTPS**: Always use HTTPS in production to protect data in transit.
-- **Key Rotation**: See [Key rotation](#key-rotation). Old keys stay until every ciphertext is re-encrypted.
-- **Access Control**: Implement proper authentication and authorization for the API endpoints.
+| Script | Does |
+|---|---|
+| `scripts/keyset.sh new\|rotate\|retire` | Creates and rotates the AEAD keyset; wraps it with KMS when `ENCRYPT_KMS_KEY_ARN` is set |
+| `scripts/keyset.sh new-hybrid\|public-key` | Creates the hybrid keyset and prints its public half |
+| `scripts/public-key-pem.sh` | Prints the hybrid public key as PEM |
+| `scripts/startup-benchmark.sh` | Measures startup with and without the AOT cache |
 
-## Project Structure
+## Layout
 
 ```
-src/
-├── main/
-│   ├── java/dev/jaderss/encrypt/
-│   │   ├── EncryptApplication.java          # Main Spring Boot application
-│   │   ├── config/
-│   │   │   └── SecurityConfig.java         # Security configuration
-│   │   ├── controller/
-│   │   │   └── SecurityController.java     # REST API endpoints
-│   │   └── service/
-│   │       └── SecurityService.java        # Encryption/decryption logic
-│   └── resources/
-│       └── application.yml                 # Application configuration
-├── test/
-│   └── java/dev/jaderss/encrypt/
-│       └── EncryptApplicationTests.java    # Unit tests
-└── http/
-    └── sample.http                         # Sample HTTP requests
+src/main/java/dev/jaderss/encrypt/
+  config/      key sources, KMS client, validated properties
+  controller/  REST endpoints, request and response records, Problem Details
+  service/     encryption, context binding, hybrid import, JFR event
+  keyset/      keyset generation, rotation, retirement, KMS wrapping
+  kdf/         per-tenant key derivation with the KDF API
+  request/     request id filter and ScopedValue
+src/preview/java/   PEM export, built only with -Ppem-preview
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
