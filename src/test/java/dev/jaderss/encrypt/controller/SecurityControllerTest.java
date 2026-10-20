@@ -99,6 +99,18 @@ class SecurityControllerTest {
     }
 
     @Test
+    void unexpectedFailureIsGenericServerErrorProblem() {
+        given(securityService.decrypt(any(), any())).willThrow(new IllegalStateException("internal detail"));
+
+        assertThat(postJson("/decrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT)))
+                .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                .hasContentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .bodyText()
+                .contains("Internal error")
+                .doesNotContain("internal detail");
+    }
+
+    @Test
     void invalidRequestIdHeaderIsReplacedWithGeneratedId() {
         given(securityService.decrypt(CONTEXT, CIPHERTEXT)).willReturn("Hello World!");
 

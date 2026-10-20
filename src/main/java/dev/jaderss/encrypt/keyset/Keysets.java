@@ -13,12 +13,15 @@ import com.google.crypto.tink.integration.awskms.AwsKmsAead;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import software.amazon.awssdk.services.kms.KmsClient;
 
 public final class Keysets {
 
     private static final Parameters AEAD_PARAMETERS = PredefinedAeadParameters.AES256_GCM;
+    private static final String KMS_KEY_ARN = "ENCRYPT_KMS_KEY_ARN";
     private static final byte[] WRAPPED_KEYSET_LABEL = "tink-encrypt/keyset/v1".getBytes(StandardCharsets.UTF_8);
 
     static {
@@ -93,36 +96,38 @@ public final class Keysets {
 
     public static void main(String[] args) throws GeneralSecurityException {
         String command = args.length == 1 ? args[0] : "";
-        switch (command) {
-            case "new-hybrid" -> System.out.println(generateHybrid());
-            case "public-key" -> System.out.println(publicKeyset(requiredEnv("ENCRYPT_HYBRID_KEYSET")));
-            default -> System.out.println(runAeadCommand(command));
+        try (KmsClient kmsClient = System.getenv(KMS_KEY_ARN) == null ? null : KmsClient.create()) {
+            System.out.println(run(command, System.getenv(), keyArn -> new AwsKmsAead(kmsClient, keyArn)));
         }
     }
 
-    private static String runAeadCommand(String command) throws GeneralSecurityException {
-        String keyArn = System.getenv("ENCRYPT_KMS_KEY_ARN");
-        try (KmsClient kmsClient = keyArn == null ? null : KmsClient.create()) {
-            Aead keyEncryptionKey = keyArn == null ? null : new AwsKmsAead(kmsClient, keyArn);
-            String keyset = switch (command) {
-                case "new" -> generate();
-                case "rotate" -> rotate(currentKeyset(keyEncryptionKey));
-                case "retire" -> retire(currentKeyset(keyEncryptionKey));
-                default ->
-                    throw new IllegalArgumentException(
-                            "usage: scripts/keyset.sh new|rotate|retire|new-hybrid|public-key");
-            };
-            return keyEncryptionKey == null ? keyset : wrap(keyset, keyEncryptionKey);
-        }
+    static String run(String command, Map<String, String> env, Function<String, Aead> keyEncryptionKeyFor)
+            throws GeneralSecurityException {
+        String keyArn = env.get(KMS_KEY_ARN);
+        Aead keyEncryptionKey = keyArn == null ? null : keyEncryptionKeyFor.apply(keyArn);
+        return switch (command) {
+            case "new" -> protect(generate(), keyEncryptionKey);
+            case "rotate" -> protect(rotate(currentKeyset(env, keyEncryptionKey)), keyEncryptionKey);
+            case "retire" -> protect(retire(currentKeyset(env, keyEncryptionKey)), keyEncryptionKey);
+            case "new-hybrid" -> generateHybrid();
+            case "public-key" -> publicKeyset(required(env, "ENCRYPT_HYBRID_KEYSET"));
+            default ->
+                throw new IllegalArgumentException("usage: scripts/keyset.sh new|rotate|retire|new-hybrid|public-key");
+        };
     }
 
-    private static String currentKeyset(Aead keyEncryptionKey) throws GeneralSecurityException {
+    private static String protect(String keyset, Aead keyEncryptionKey) throws GeneralSecurityException {
+        return keyEncryptionKey == null ? keyset : wrap(keyset, keyEncryptionKey);
+    }
+
+    private static String currentKeyset(Map<String, String> env, Aead keyEncryptionKey)
+            throws GeneralSecurityException {
         return keyEncryptionKey == null
-                ? requiredEnv("ENCRYPT_KEYSET")
-                : encode(unwrap(requiredEnv("ENCRYPT_KMS_ENCRYPTED_KEYSET"), keyEncryptionKey));
+                ? required(env, "ENCRYPT_KEYSET")
+                : encode(unwrap(required(env, "ENCRYPT_KMS_ENCRYPTED_KEYSET"), keyEncryptionKey));
     }
 
-    private static String requiredEnv(String name) {
-        return Objects.requireNonNull(System.getenv(name), name);
+    private static String required(Map<String, String> env, String name) {
+        return Objects.requireNonNull(env.get(name), name);
     }
 }

@@ -113,7 +113,7 @@ Every error is an RFC 9457 Problem Details body with content type `application/p
 | `400` | Malformed JSON, a missing field, or a context outside the identifier alphabet |
 | `415` | A content type other than JSON |
 | `422` | A ciphertext that does not decrypt: malformed, moved to another context, or under a retired key |
-| `500` | Encryption itself failed |
+| `500` | Encryption failed, or an unexpected error. The detail never carries internal exception messages |
 
 The `422` detail is the same for every cause on purpose, so a caller cannot use the error to tell a wrong context from a retired key.
 

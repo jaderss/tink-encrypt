@@ -9,4 +9,9 @@ public record PlaintextRequest(EncryptionContext context, String plaintext) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(plaintext, "plaintext");
     }
+
+    @Override
+    public String toString() {
+        return "PlaintextRequest[context=" + context + ", plaintext=***]";
+    }
 }

@@ -36,6 +36,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Encryption failed", "The service could not encrypt.");
     }
 
+    @ExceptionHandler(Exception.class)
+    ProblemDetail unexpectedFailure(Exception e) {
+        log.error("Unexpected failure, requestId={}", RequestContext.currentRequestId(), e);
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error", "The request could not be completed.");
+    }
+
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
             Exception ex, Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {

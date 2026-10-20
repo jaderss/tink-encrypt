@@ -1,11 +1,16 @@
 package dev.jaderss.encrypt.keyset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class KeysetsTest {
@@ -57,5 +62,70 @@ class KeysetsTest {
         String wrapped = Keysets.wrap(Keysets.generate(), keyEncryptionKey);
 
         assertThatThrownBy(() -> Keysets.unwrap(wrapped, otherKey)).isInstanceOf(GeneralSecurityException.class);
+    }
+
+    @Nested
+    class CommandLine {
+
+        private final Aead keyEncryptionKey = Keysets.parse(Keysets.generate()).getPrimitive(Aead.class);
+
+        CommandLine() throws GeneralSecurityException {}
+
+        @Test
+        void newPrintsCleartextKeysetWithoutKms() throws GeneralSecurityException {
+            String keyset = Keysets.run("new", Map.of(), keyArn -> keyEncryptionKey);
+
+            assertThat(Keysets.parse(keyset).size()).isOne();
+        }
+
+        @Test
+        void newPrintsOnlyWrappedKeysetInKmsMode() throws GeneralSecurityException {
+            String output = Keysets.run("new", kmsEnv(), keyArn -> keyEncryptionKey);
+
+            assertThatThrownBy(() -> Keysets.parse(output)).isInstanceOf(GeneralSecurityException.class);
+            assertThat(Keysets.unwrap(output, keyEncryptionKey).size()).isOne();
+        }
+
+        @Test
+        void rotateInKmsModeUnwrapsRotatesAndWrapsAgain() throws GeneralSecurityException {
+            String wrapped = Keysets.wrap(Keysets.generate(), keyEncryptionKey);
+            int originalPrimary =
+                    Keysets.unwrap(wrapped, keyEncryptionKey).getPrimary().getId();
+            Map<String, String> env = Map.of(
+                    "ENCRYPT_KMS_KEY_ARN",
+                    "arn:aws:kms:us-east-1:000000000000:key/test",
+                    "ENCRYPT_KMS_ENCRYPTED_KEYSET",
+                    wrapped);
+
+            String output = Keysets.run("rotate", env, keyArn -> keyEncryptionKey);
+
+            assertThatThrownBy(() -> Keysets.parse(output)).isInstanceOf(GeneralSecurityException.class);
+            KeysetHandle rotated = Keysets.unwrap(output, keyEncryptionKey);
+            assertThat(rotated.size()).isEqualTo(2);
+            assertThat(rotated.getAt(0).getId()).isEqualTo(originalPrimary);
+        }
+
+        @Test
+        void kmsModeUsesKeyArnFromEnvironment() throws GeneralSecurityException {
+            List<String> requestedArns = new ArrayList<>();
+
+            Keysets.run("new", kmsEnv(), keyArn -> {
+                requestedArns.add(keyArn);
+                return keyEncryptionKey;
+            });
+
+            assertThat(requestedArns).containsExactly("arn:aws:kms:us-east-1:000000000000:key/test");
+        }
+
+        @Test
+        void rejectsUnknownCommandWithUsage() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> Keysets.run("bogus", Map.of(), keyArn -> keyEncryptionKey))
+                    .withMessageContaining("usage");
+        }
+
+        private static Map<String, String> kmsEnv() {
+            return Map.of("ENCRYPT_KMS_KEY_ARN", "arn:aws:kms:us-east-1:000000000000:key/test");
+        }
     }
 }
