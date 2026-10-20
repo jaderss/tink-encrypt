@@ -1,233 +1,84 @@
 package dev.jaderss.encrypt.integration;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.jaderss.encrypt.TestKeysetConfig;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClient;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureTestRestTemplate
 @Import(TestKeysetConfig.class)
 class EncryptionIntegrationTest {
 
-    @LocalServerPort
-    private int port;
+    private static final MediaType TEXT_PLAIN_UTF8 = new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8);
 
-    @Autowired
-    private TestRestTemplate restTemplate;
+    private final RestClient client;
 
-    private String getBaseUrl() {
-        return "http://localhost:" + port;
+    EncryptionIntegrationTest(@LocalServerPort int port) {
+        client = RestClient.builder()
+                .baseUrl("http://localhost:" + port)
+                .defaultStatusHandler(status -> true, (request, response) -> {})
+                .build();
+    }
+
+    @ParameterizedTest
+    @MethodSource("dev.jaderss.encrypt.SamplePlaintexts#nonEmpty")
+    void decryptRestoresPlaintextEncryptedOverHttp(String plaintext) {
+        ResponseEntity<String> encrypted = post("/encrypt", TEXT_PLAIN_UTF8, plaintext);
+        assertThat(encrypted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(encrypted.getBody()).isBase64().isNotEqualTo(plaintext);
+
+        ResponseEntity<String> decrypted = post("/decrypt", TEXT_PLAIN_UTF8, encrypted.getBody());
+        assertThat(decrypted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(decrypted.getBody()).isEqualTo(plaintext);
     }
 
     @Test
-    void encryptAndDecrypt_ShouldWorkEndToEnd_WithSimpleText() {
-        // Given
-        String originalText = "Hello World!";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // When - Encrypt
-        HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
-
-        // Then - Verify encryption
-        assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(encryptResponse.getBody()).isNotNull();
-        assertThat(encryptResponse.getBody()).isNotEmpty();
-        assertThat(encryptResponse.getBody()).isNotEqualTo(originalText);
-
-        // When - Decrypt
-        String encryptedText = encryptResponse.getBody();
-        HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then - Verify decryption
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decryptResponse.getBody()).isEqualTo(originalText);
+    void encryptStoresTrimmedPlaintext() {
+        assertThat(decrypt(encrypt("  Hello World!  "))).isEqualTo("Hello World!");
     }
 
     @Test
-    void encryptAndDecrypt_ShouldWorkEndToEnd_WithSpecialCharacters() {
-        // Given
-        String originalText = "Special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // When - Encrypt
-        HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
-
-        // Then - Verify encryption
-        assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(encryptResponse.getBody()).isNotNull();
-        assertThat(encryptResponse.getBody()).isNotEmpty();
-        assertThat(encryptResponse.getBody()).isNotEqualTo(originalText);
-
-        // When - Decrypt
-        String encryptedText = encryptResponse.getBody();
-        HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then - Verify decryption
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decryptResponse.getBody()).isEqualTo(originalText);
+    void decryptAcceptsCiphertextSurroundedByWhitespace() {
+        assertThat(decrypt("  " + encrypt("Hello World!") + "  ")).isEqualTo("Hello World!");
     }
 
     @Test
-    void encryptAndDecrypt_ShouldWorkEndToEnd_WithUnicodeCharacters() {
-        // Given
-        String originalText = "Unicode: 你好世界 🌍 émojis";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // When - Encrypt
-        HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
-
-        // Then - Verify encryption
-        assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(encryptResponse.getBody()).isNotNull();
-        assertThat(encryptResponse.getBody()).isNotEmpty();
-        assertThat(encryptResponse.getBody()).isNotEqualTo(originalText);
-
-        // When - Decrypt
-        String encryptedText = encryptResponse.getBody();
-        HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then - Verify decryption
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decryptResponse.getBody()).isEqualTo(originalText);
+    void decryptReturnsServerErrorForInvalidCiphertext() {
+        assertThat(post("/decrypt", TEXT_PLAIN_UTF8, "invalid-ciphertext").getStatusCode())
+                .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @Test
-    void encryptAndDecrypt_ShouldWorkEndToEnd_WithLongText() {
-        // Given
-        StringBuilder longText = new StringBuilder();
-        for (int i = 0; i < 100; i++) {
-            longText.append("This is a long text for testing encryption and decryption. ");
-        }
-        String originalText = longText.toString();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // When - Encrypt
-        HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
-
-        // Then - Verify encryption
-        assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(encryptResponse.getBody()).isNotNull();
-        assertThat(encryptResponse.getBody()).isNotEmpty();
-        assertThat(encryptResponse.getBody()).isNotEqualTo(originalText);
-
-        // When - Decrypt
-        String encryptedText = encryptResponse.getBody();
-        HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then - Verify decryption
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decryptResponse.getBody()).isEqualTo(originalText.trim());
+    void encryptRejectsJsonContentType() {
+        assertThat(post("/encrypt", MediaType.APPLICATION_JSON, "{\"text\":\"Hello\"}")
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
     }
 
-    @Test
-    void encrypt_ShouldTrimWhitespace() {
-        // Given
-        String originalText = "  Hello World!  ";
-        String expectedTrimmed = "Hello World!";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // When - Encrypt
-        HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
-
-        // Then - Verify encryption
-        assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(encryptResponse.getBody()).isNotNull();
-        assertThat(encryptResponse.getBody()).isNotEmpty();
-
-        // When - Decrypt to verify trimming occurred
-        String encryptedText = encryptResponse.getBody();
-        HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then - Verify decryption returns trimmed text
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decryptResponse.getBody()).isEqualTo(expectedTrimmed);
+    private String encrypt(String plaintext) {
+        return post("/encrypt", TEXT_PLAIN_UTF8, plaintext).getBody();
     }
 
-    @Test
-    void decrypt_ShouldTrimWhitespace() {
-        // Given
-        String originalText = "Hello World!";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // First encrypt the text
-        HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
-        String encryptedText = encryptResponse.getBody();
-
-        // When - Decrypt with whitespace
-        String encryptedTextWithSpaces = "  " + encryptedText + "  ";
-        HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedTextWithSpaces, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then - Verify decryption works despite whitespace
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decryptResponse.getBody()).isEqualTo(originalText);
+    private String decrypt(String ciphertext) {
+        return post("/decrypt", TEXT_PLAIN_UTF8, ciphertext).getBody();
     }
 
-    @Test
-    void decrypt_ShouldReturn500_WhenGivenInvalidCiphertext() {
-        // Given
-        String invalidCiphertext = "invalid-ciphertext";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        // When
-        HttpEntity<String> decryptRequest = new HttpEntity<>(invalidCiphertext, headers);
-        ResponseEntity<String> decryptResponse =
-                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
-
-        // Then
-        assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-    @Test
-    void encrypt_ShouldReturn415_WhenWrongContentType() {
-        // Given
-        String jsonContent = "{\"text\":\"Hello World!\"}";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        // When
-        HttpEntity<String> request = new HttpEntity<>(jsonContent, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity(getBaseUrl() + "/encrypt", request, String.class);
-
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+    private ResponseEntity<String> post(String path, MediaType contentType, String body) {
+        return client.post()
+                .uri(path)
+                .contentType(contentType)
+                .body(body)
+                .retrieve()
+                .toEntity(String.class);
     }
 }

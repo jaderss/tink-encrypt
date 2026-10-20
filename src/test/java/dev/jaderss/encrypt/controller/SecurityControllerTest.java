@@ -1,192 +1,95 @@
 package dev.jaderss.encrypt.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import dev.jaderss.encrypt.service.SecurityService;
 import java.security.GeneralSecurityException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequestBuilder;
 
 @WebMvcTest(SecurityController.class)
 class SecurityControllerTest {
 
+    private static final String CIPHERTEXT = "ciphertext-from-service";
+
     @Autowired
-    private MockMvc mockMvc;
+    private MockMvcTester mvc;
 
     @MockitoBean
     private SecurityService securityService;
 
-    @Test
-    void encrypt_ShouldReturnEncryptedText_WhenGivenValidPlaintext() throws Exception {
-        // Given
-        String plaintext = "Hello World!";
-        String expectedEncrypted = "encrypted-base64-string";
-        when(securityService.encrypt(plaintext)).thenReturn(expectedEncrypted);
+    @ParameterizedTest
+    @MethodSource("dev.jaderss.encrypt.SamplePlaintexts#nonEmpty")
+    void encryptReturnsCiphertextFromService(String plaintext) throws Exception {
+        given(securityService.encrypt(plaintext)).willReturn(CIPHERTEXT);
 
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(plaintext))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedEncrypted));
-
-        verify(securityService).encrypt(plaintext);
+        assertThat(postText("/encrypt", plaintext)).hasStatusOk().bodyText().isEqualTo(CIPHERTEXT);
     }
 
     @Test
-    void encrypt_ShouldTrimInputAndReturnEncryptedText() throws Exception {
-        // Given
-        String plaintextWithSpaces = "  Hello World!  ";
-        String trimmedPlaintext = "Hello World!";
-        String expectedEncrypted = "encrypted-base64-string";
-        when(securityService.encrypt(trimmedPlaintext)).thenReturn(expectedEncrypted);
+    void encryptTrimsPlaintextBeforeEncrypting() throws Exception {
+        given(securityService.encrypt("Hello World!")).willReturn(CIPHERTEXT);
 
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(plaintextWithSpaces))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedEncrypted));
-
-        verify(securityService).encrypt(trimmedPlaintext);
+        assertThat(postText("/encrypt", "  Hello World!  "))
+                .hasStatusOk()
+                .bodyText()
+                .isEqualTo(CIPHERTEXT);
     }
 
     @Test
-    void encrypt_ShouldHandleEmptyString() throws Exception {
-        // Given
-        String emptyString = "";
+    void decryptReturnsPlaintextFromService() throws Exception {
+        given(securityService.decrypt(CIPHERTEXT)).willReturn("Hello World!");
 
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(emptyString))
-                .andExpect(status().isBadRequest());
-
-        securityService.encrypt(emptyString);
+        assertThat(postText("/decrypt", CIPHERTEXT)).hasStatusOk().bodyText().isEqualTo("Hello World!");
     }
 
     @Test
-    void encrypt_ShouldReturnInternalServerError_WhenServiceThrowsException() throws Exception {
-        // Given
-        String plaintext = "Hello World!";
-        when(securityService.encrypt(anyString())).thenThrow(new GeneralSecurityException("Encryption failed"));
+    void decryptTrimsCiphertextBeforeDecrypting() throws Exception {
+        given(securityService.decrypt(CIPHERTEXT)).willReturn("Hello World!");
 
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(plaintext))
-                .andExpect(status().isInternalServerError());
-
-        verify(securityService).encrypt(plaintext);
+        assertThat(postText("/decrypt", "  " + CIPHERTEXT + "  "))
+                .hasStatusOk()
+                .bodyText()
+                .isEqualTo("Hello World!");
     }
 
-    @Test
-    void decrypt_ShouldReturnDecryptedText_WhenGivenValidCiphertext() throws Exception {
-        // Given
-        String ciphertext = "encrypted-base64-string";
-        String expectedDecrypted = "Hello World!";
-        when(securityService.decrypt(ciphertext)).thenReturn(expectedDecrypted);
+    @ParameterizedTest
+    @ValueSource(strings = {"/encrypt", "/decrypt"})
+    void returnsServerErrorWhenCryptoFails(String path) throws Exception {
+        given(securityService.encrypt(anyString())).willThrow(new GeneralSecurityException("encrypt failed"));
+        given(securityService.decrypt(anyString())).willThrow(new GeneralSecurityException("decrypt failed"));
 
-        // When & Then
-        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN).content(ciphertext))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedDecrypted));
-
-        verify(securityService).decrypt(ciphertext);
+        assertThat(postText(path, "payload")).hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @Test
-    void decrypt_ShouldTrimInputAndReturnDecryptedText() throws Exception {
-        // Given
-        String ciphertextWithSpaces = "  encrypted-base64-string  ";
-        String trimmedCiphertext = "encrypted-base64-string";
-        String expectedDecrypted = "Hello World!";
-        when(securityService.decrypt(trimmedCiphertext)).thenReturn(expectedDecrypted);
-
-        // When & Then
-        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN).content(ciphertextWithSpaces))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedDecrypted));
-
-        verify(securityService).decrypt(trimmedCiphertext);
+    @ParameterizedTest
+    @ValueSource(strings = {"/encrypt", "/decrypt"})
+    void rejectsMissingBodyWithoutCallingService(String path) {
+        assertThat(mvc.post().uri(path).contentType(MediaType.TEXT_PLAIN)).hasStatus(HttpStatus.BAD_REQUEST);
+        verifyNoInteractions(securityService);
     }
 
-    @Test
-    void decrypt_ShouldReturnInternalServerError_WhenServiceThrowsException() throws Exception {
-        // Given
-        String ciphertext = "invalid-ciphertext";
-        when(securityService.decrypt(anyString())).thenThrow(new GeneralSecurityException("Decryption failed"));
-
-        // When & Then
-        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN).content(ciphertext))
-                .andExpect(status().isInternalServerError());
-
-        verify(securityService).decrypt(ciphertext);
+    @ParameterizedTest
+    @ValueSource(strings = {"/encrypt", "/decrypt"})
+    void rejectsJsonContentTypeWithoutCallingService(String path) {
+        assertThat(mvc.post().uri(path).contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Hello\"}"))
+                .hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        verifyNoInteractions(securityService);
     }
 
-    @Test
-    void encrypt_ShouldReturn400_WhenNoBodyProvided() throws Exception {
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN)).andExpect(status().isBadRequest());
-
-        verify(securityService, never()).encrypt(anyString());
-    }
-
-    @Test
-    void decrypt_ShouldReturn400_WhenNoBodyProvided() throws Exception {
-        // When & Then
-        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN)).andExpect(status().isBadRequest());
-
-        verify(securityService, never()).decrypt(anyString());
-    }
-
-    @Test
-    void encrypt_ShouldReturn415_WhenWrongContentType() throws Exception {
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Hello World!\"}"))
-                .andExpect(status().isUnsupportedMediaType());
-
-        verify(securityService, never()).encrypt(anyString());
-    }
-
-    @Test
-    void decrypt_ShouldReturn415_WhenWrongContentType() throws Exception {
-        // When & Then
-        mockMvc.perform(post("/decrypt")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"text\":\"encrypted-text\"}"))
-                .andExpect(status().isUnsupportedMediaType());
-
-        verify(securityService, never()).decrypt(anyString());
-    }
-
-    @Test
-    void encrypt_ShouldHandleSpecialCharacters() throws Exception {
-        // Given
-        String specialChars = "Special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?";
-        String expectedEncrypted = "encrypted-special-chars";
-        when(securityService.encrypt(specialChars)).thenReturn(expectedEncrypted);
-
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(specialChars))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedEncrypted));
-
-        verify(securityService).encrypt(specialChars);
-    }
-
-    @Test
-    void encrypt_ShouldHandleUnicodeCharacters() throws Exception {
-        // Given
-        String unicodeText = "Unicode: 你好世界 🌍 émojis";
-        String expectedEncrypted = "encrypted-unicode-text";
-        when(securityService.encrypt(unicodeText)).thenReturn(expectedEncrypted);
-
-        // When & Then
-        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(unicodeText))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedEncrypted));
-
-        verify(securityService).encrypt(unicodeText);
+    private MockMvcRequestBuilder postText(String path, String body) {
+        return mvc.post().uri(path).contentType(MediaType.TEXT_PLAIN).content(body);
     }
 }

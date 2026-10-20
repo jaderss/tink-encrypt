@@ -1,199 +1,78 @@
 package dev.jaderss.encrypt.service;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeysetHandle;
-import com.google.crypto.tink.aead.AeadConfig;
-import com.google.crypto.tink.aead.PredefinedAeadParameters;
+import dev.jaderss.encrypt.SamplePlaintexts;
+import dev.jaderss.encrypt.TestKeysetConfig;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-@ExtendWith(MockitoExtension.class)
 class SecurityServiceTest {
 
-    private SecurityService securityService;
-    private KeysetHandle keysetHandle;
+    private final SecurityService securityService;
 
-    @BeforeEach
-    void setUp() throws GeneralSecurityException {
-        // Register AEAD configuration
-        AeadConfig.register();
-        // Generate a test key for each test
-        keysetHandle = KeysetHandle.generateNew(PredefinedAeadParameters.AES256_GCM);
-        securityService = new SecurityService(keysetHandle.getPrimitive(Aead.class));
+    SecurityServiceTest() throws GeneralSecurityException {
+        securityService = new SecurityService(TestKeysetConfig.newKeysetHandle().getPrimitive(Aead.class));
+    }
+
+    static Stream<String> plaintexts() {
+        return Stream.concat(Stream.of(""), SamplePlaintexts.nonEmpty());
+    }
+
+    @ParameterizedTest
+    @MethodSource("plaintexts")
+    void decryptRestoresEncryptedPlaintext(String plaintext) throws GeneralSecurityException {
+        assertThat(securityService.decrypt(securityService.encrypt(plaintext))).isEqualTo(plaintext);
     }
 
     @Test
-    void encrypt_ShouldReturnBase64EncodedString_WhenGivenPlaintext() throws GeneralSecurityException {
-        // Given
-        String plaintext = "Hello World!";
-
-        // When
-        String encrypted = securityService.encrypt(plaintext);
-
-        // Then
-        assertThat(encrypted).isNotNull();
-        assertThat(encrypted).isNotEmpty();
-        assertThat(encrypted).isNotEqualTo(plaintext);
-
-        // Verify it's valid Base64
-        assertThatCode(() -> Base64.getDecoder().decode(encrypted)).doesNotThrowAnyException();
+    void encryptReturnsBase64CiphertextThatDiffersFromPlaintext() throws GeneralSecurityException {
+        assertThat(securityService.encrypt("Hello World!")).isBase64().isNotEqualTo("Hello World!");
     }
 
     @Test
-    void encrypt_ShouldReturnDifferentResults_ForSameInput() throws GeneralSecurityException {
-        // Given
-        String plaintext = "Hello World!";
-
-        // When
-        String encrypted1 = securityService.encrypt(plaintext);
-        String encrypted2 = securityService.encrypt(plaintext);
-
-        // Then
-        assertThat(encrypted1).isNotEqualTo(encrypted2);
+    void encryptProducesDifferentCiphertextForSamePlaintext() throws GeneralSecurityException {
+        assertThat(securityService.encrypt("Hello World!")).isNotEqualTo(securityService.encrypt("Hello World!"));
     }
 
     @Test
-    void encrypt_ShouldHandleEmptyString() throws GeneralSecurityException {
-        // Given
-        String plaintext = "";
-
-        // When
-        String encrypted = securityService.encrypt(plaintext);
-
-        // Then
-        assertThat(encrypted).isNotNull();
-        assertThat(encrypted).isNotEmpty();
+    void decryptRejectsInvalidBase64() {
+        assertThatIllegalArgumentException().isThrownBy(() -> securityService.decrypt("invalid-base64!@#"));
     }
 
     @Test
-    void encrypt_ShouldHandleSpecialCharacters() throws GeneralSecurityException {
-        // Given
-        String plaintext = "Special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?";
+    void decryptRejectsBase64ThatIsNotCiphertext() {
+        String notCiphertext = Base64.getEncoder().encodeToString("not a ciphertext".getBytes(StandardCharsets.UTF_8));
 
-        // When
-        String encrypted = securityService.encrypt(plaintext);
-
-        // Then
-        assertThat(encrypted).isNotNull();
-        assertThat(encrypted).isNotEmpty();
+        assertThatThrownBy(() -> securityService.decrypt(notCiphertext)).isInstanceOf(GeneralSecurityException.class);
     }
 
     @Test
-    void encrypt_ShouldHandleUnicodeCharacters() throws GeneralSecurityException {
-        // Given
-        String plaintext = "Unicode: 你好世界 🌍 émojis";
+    void decryptRejectsCiphertextFromAnotherKeyset() throws GeneralSecurityException {
+        SecurityService otherService =
+                new SecurityService(TestKeysetConfig.newKeysetHandle().getPrimitive(Aead.class));
+        String foreignCiphertext = otherService.encrypt("Hello World!");
 
-        // When
-        String encrypted = securityService.encrypt(plaintext);
-
-        // Then
-        assertThat(encrypted).isNotNull();
-        assertThat(encrypted).isNotEmpty();
-    }
-
-    @Test
-    void decrypt_ShouldReturnOriginalPlaintext_WhenGivenValidCiphertext() throws GeneralSecurityException {
-        // Given
-        String originalText = "Hello World!";
-        String encrypted = securityService.encrypt(originalText);
-
-        // When
-        String decrypted = securityService.decrypt(encrypted);
-
-        // Then
-        assertThat(decrypted).isEqualTo(originalText);
-    }
-
-    @Test
-    void decrypt_ShouldHandleEmptyStringEncryption() throws GeneralSecurityException {
-        // Given
-        String originalText = "";
-        String encrypted = securityService.encrypt(originalText);
-
-        // When
-        String decrypted = securityService.decrypt(encrypted);
-
-        // Then
-        assertThat(decrypted).isEqualTo(originalText);
-    }
-
-    @Test
-    void decrypt_ShouldHandleSpecialCharacters() throws GeneralSecurityException {
-        // Given
-        String originalText = "Special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?";
-        String encrypted = securityService.encrypt(originalText);
-
-        // When
-        String decrypted = securityService.decrypt(encrypted);
-
-        // Then
-        assertThat(decrypted).isEqualTo(originalText);
-    }
-
-    @Test
-    void decrypt_ShouldHandleUnicodeCharacters() throws GeneralSecurityException {
-        // Given
-        String originalText = "Unicode: 你好世界 🌍 émojis";
-        String encrypted = securityService.encrypt(originalText);
-
-        // When
-        String decrypted = securityService.decrypt(encrypted);
-
-        // Then
-        assertThat(decrypted).isEqualTo(originalText);
-    }
-
-    @Test
-    void decrypt_ShouldThrowException_WhenGivenInvalidBase64() {
-        // Given
-        String invalidBase64 = "invalid-base64!@#";
-
-        // When & Then
-        assertThatThrownBy(() -> securityService.decrypt(invalidBase64)).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void decrypt_ShouldThrowException_WhenGivenInvalidCiphertext() {
-        // Given
-        String invalidCiphertext = Base64.getEncoder().encodeToString("invalid ciphertext".getBytes());
-
-        // When & Then
-        assertThatThrownBy(() -> securityService.decrypt(invalidCiphertext))
+        assertThatThrownBy(() -> securityService.decrypt(foreignCiphertext))
                 .isInstanceOf(GeneralSecurityException.class);
     }
 
     @Test
-    void encryptDecrypt_ShouldWorkWithLongText() throws GeneralSecurityException {
-        // Given
-        StringBuilder longText = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
-            longText.append("This is a long text for testing encryption and decryption. ");
-        }
-        String originalText = longText.toString();
-
-        // When
-        String encrypted = securityService.encrypt(originalText);
-        String decrypted = securityService.decrypt(encrypted);
-
-        // Then
-        assertThat(decrypted).isEqualTo(originalText);
+    void encryptRejectsNullPlaintext() {
+        assertThatNullPointerException().isThrownBy(() -> securityService.encrypt(null));
     }
 
     @Test
-    void encrypt_ShouldThrowException_WhenGivenNullInput() {
-        // When & Then
-        assertThatThrownBy(() -> securityService.encrypt(null)).isInstanceOf(NullPointerException.class);
-    }
-
-    @Test
-    void decrypt_ShouldThrowException_WhenGivenNullInput() {
-        // When & Then
-        assertThatThrownBy(() -> securityService.decrypt(null)).isInstanceOf(NullPointerException.class);
+    void decryptRejectsNullCiphertext() {
+        assertThatNullPointerException().isThrownBy(() -> securityService.decrypt(null));
     }
 }

@@ -14,9 +14,13 @@ import org.springframework.test.context.DynamicPropertyRegistrar;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestKeysetConfig {
 
-    public static String newKeyset() throws GeneralSecurityException {
+    public static KeysetHandle newKeysetHandle() throws GeneralSecurityException {
         AeadConfig.register();
-        return encode(KeysetHandle.generateNew(PredefinedAeadParameters.AES256_GCM));
+        return KeysetHandle.generateNew(PredefinedAeadParameters.AES256_GCM);
+    }
+
+    public static String newKeyset() throws GeneralSecurityException {
+        return encode(newKeysetHandle());
     }
 
     public static String encode(KeysetHandle handle) throws GeneralSecurityException {
