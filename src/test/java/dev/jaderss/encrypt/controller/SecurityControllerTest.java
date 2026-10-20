@@ -1,7 +1,8 @@
 package dev.jaderss.encrypt.controller;
 
+import static dev.jaderss.encrypt.Samples.CONTEXT;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -18,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequestBuilder;
+import tools.jackson.databind.json.JsonMapper;
 
 @WebMvcTest(SecurityController.class)
 class SecurityControllerTest {
@@ -27,69 +29,81 @@ class SecurityControllerTest {
     @Autowired
     private MockMvcTester mvc;
 
+    @Autowired
+    private JsonMapper jsonMapper;
+
     @MockitoBean
     private SecurityService securityService;
 
     @ParameterizedTest
-    @MethodSource("dev.jaderss.encrypt.SamplePlaintexts#nonEmpty")
-    void encryptReturnsCiphertextFromService(String plaintext) throws Exception {
-        given(securityService.encrypt(plaintext)).willReturn(CIPHERTEXT);
+    @MethodSource("dev.jaderss.encrypt.Samples#plaintexts")
+    void encryptReturnsCiphertextForContextAndPlaintext(String plaintext) throws Exception {
+        given(securityService.encrypt(CONTEXT, plaintext)).willReturn(CIPHERTEXT);
 
-        assertThat(postText("/encrypt", plaintext)).hasStatusOk().bodyText().isEqualTo(CIPHERTEXT);
-    }
-
-    @Test
-    void encryptTrimsPlaintextBeforeEncrypting() throws Exception {
-        given(securityService.encrypt("Hello World!")).willReturn(CIPHERTEXT);
-
-        assertThat(postText("/encrypt", "  Hello World!  "))
+        assertThat(postJson("/encrypt", new EncryptRequest(CONTEXT, plaintext)))
                 .hasStatusOk()
-                .bodyText()
+                .bodyJson()
+                .extractingPath("$.ciphertext")
                 .isEqualTo(CIPHERTEXT);
     }
 
     @Test
-    void decryptReturnsPlaintextFromService() throws Exception {
-        given(securityService.decrypt(CIPHERTEXT)).willReturn("Hello World!");
+    void decryptReturnsPlaintextForContextAndCiphertext() throws Exception {
+        given(securityService.decrypt(CONTEXT, CIPHERTEXT)).willReturn("Hello World!");
 
-        assertThat(postText("/decrypt", CIPHERTEXT)).hasStatusOk().bodyText().isEqualTo("Hello World!");
-    }
-
-    @Test
-    void decryptTrimsCiphertextBeforeDecrypting() throws Exception {
-        given(securityService.decrypt(CIPHERTEXT)).willReturn("Hello World!");
-
-        assertThat(postText("/decrypt", "  " + CIPHERTEXT + "  "))
+        assertThat(postJson("/decrypt", new DecryptRequest(CONTEXT, CIPHERTEXT)))
                 .hasStatusOk()
-                .bodyText()
+                .bodyJson()
+                .extractingPath("$.plaintext")
                 .isEqualTo("Hello World!");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"/encrypt", "/decrypt"})
-    void returnsServerErrorWhenCryptoFails(String path) throws Exception {
-        given(securityService.encrypt(anyString())).willThrow(new GeneralSecurityException("encrypt failed"));
-        given(securityService.decrypt(anyString())).willThrow(new GeneralSecurityException("decrypt failed"));
+    @Test
+    void encryptReturnsServerErrorWhenEncryptionFails() throws Exception {
+        given(securityService.encrypt(any(), any())).willThrow(new GeneralSecurityException("encrypt failed"));
 
-        assertThat(postText(path, "payload")).hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(postJson("/encrypt", new EncryptRequest(CONTEXT, "Hello World!")))
+                .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
+    void decryptReturnsServerErrorWhenDecryptionFails() throws Exception {
+        given(securityService.decrypt(any(), any())).willThrow(new GeneralSecurityException("decrypt failed"));
+
+        assertThat(postJson("/decrypt", new DecryptRequest(CONTEXT, CIPHERTEXT)))
+                .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/encrypt", "/decrypt"})
-    void rejectsMissingBodyWithoutCallingService(String path) {
-        assertThat(mvc.post().uri(path).contentType(MediaType.TEXT_PLAIN)).hasStatus(HttpStatus.BAD_REQUEST);
+    @ValueSource(
+            strings = {
+                "",
+                "{\"plaintext\":\"Hello\"}",
+                "{\"context\":{\"tenantId\":\"acme\",\"field\":\"ssn\"}}",
+                "{\"context\":{\"tenantId\":\"acme:ssn\",\"field\":\"x\"},\"plaintext\":\"Hello\"}",
+                "{\"context\":{\"tenantId\":\"acme\"},\"plaintext\":\"Hello\"}"
+            })
+    void encryptRejectsIncompleteOrInvalidRequestWithoutCallingService(String body) {
+        assertThat(mvc.post()
+                        .uri("/encrypt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .hasStatus(HttpStatus.BAD_REQUEST);
         verifyNoInteractions(securityService);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"/encrypt", "/decrypt"})
-    void rejectsJsonContentTypeWithoutCallingService(String path) {
-        assertThat(mvc.post().uri(path).contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Hello\"}"))
+    void rejectsPlainTextContentTypeWithoutCallingService(String path) {
+        assertThat(mvc.post().uri(path).contentType(MediaType.TEXT_PLAIN).content("Hello"))
                 .hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         verifyNoInteractions(securityService);
     }
 
-    private MockMvcRequestBuilder postText(String path, String body) {
-        return mvc.post().uri(path).contentType(MediaType.TEXT_PLAIN).content(body);
+    private MockMvcRequestBuilder postJson(String path, Object request) {
+        return mvc.post()
+                .uri(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(request));
     }
 }

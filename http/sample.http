@@ -1,11 +1,19 @@
-### Encrypt plain text
+### Encrypt an SSN for tenant acme
 POST http://localhost:8080/encrypt
-Content-Type: text/plain
+Content-Type: application/json
 
-Hello World!
+{"context": {"tenantId": "acme", "field": "ssn"}, "plaintext": "123-45-6789"}
 
-### Decrypt cipher text
+> {% client.global.set("ciphertext", response.body.ciphertext); %}
+
+### Decrypt it in the same context
 POST http://localhost:8080/decrypt
-Content-Type: text/plain
+Content-Type: application/json
 
-ATZwaYkDzds0ltoZ3WuPFVF0/bvdufgvnK6fapQwWe2iv2GK+m+nPiuj3/q4
+{"context": {"tenantId": "acme", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}
+
+### Decrypting under another tenant fails
+POST http://localhost:8080/decrypt
+Content-Type: application/json
+
+{"context": {"tenantId": "globex", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}

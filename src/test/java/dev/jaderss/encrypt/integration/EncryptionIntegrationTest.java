@@ -1,9 +1,14 @@
 package dev.jaderss.encrypt.integration;
 
+import static dev.jaderss.encrypt.Samples.CONTEXT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.jaderss.encrypt.TestKeysetConfig;
-import java.nio.charset.StandardCharsets;
+import dev.jaderss.encrypt.controller.DecryptRequest;
+import dev.jaderss.encrypt.controller.DecryptResponse;
+import dev.jaderss.encrypt.controller.EncryptRequest;
+import dev.jaderss.encrypt.controller.EncryptResponse;
+import dev.jaderss.encrypt.service.EncryptionContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -19,8 +24,6 @@ import org.springframework.web.client.RestClient;
 @Import(TestKeysetConfig.class)
 class EncryptionIntegrationTest {
 
-    private static final MediaType TEXT_PLAIN_UTF8 = new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8);
-
     private final RestClient client;
 
     EncryptionIntegrationTest(@LocalServerPort int port) {
@@ -31,54 +34,43 @@ class EncryptionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("dev.jaderss.encrypt.SamplePlaintexts#nonEmpty")
+    @MethodSource("dev.jaderss.encrypt.Samples#plaintexts")
     void decryptRestoresPlaintextEncryptedOverHttp(String plaintext) {
-        ResponseEntity<String> encrypted = post("/encrypt", TEXT_PLAIN_UTF8, plaintext);
+        ResponseEntity<EncryptResponse> encrypted =
+                post("/encrypt", new EncryptRequest(CONTEXT, plaintext), EncryptResponse.class);
         assertThat(encrypted.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(encrypted.getBody()).isBase64().isNotEqualTo(plaintext);
 
-        ResponseEntity<String> decrypted = post("/decrypt", TEXT_PLAIN_UTF8, encrypted.getBody());
+        ResponseEntity<DecryptResponse> decrypted =
+                post("/decrypt", new DecryptRequest(CONTEXT, encrypted.getBody().ciphertext()), DecryptResponse.class);
         assertThat(decrypted.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decrypted.getBody()).isEqualTo(plaintext);
+        assertThat(decrypted.getBody()).isEqualTo(new DecryptResponse(plaintext));
     }
 
     @Test
-    void encryptStoresTrimmedPlaintext() {
-        assertThat(decrypt(encrypt("  Hello World!  "))).isEqualTo("Hello World!");
-    }
+    void decryptFailsWhenCiphertextIsMovedToAnotherTenant() {
+        String ciphertext = post("/encrypt", new EncryptRequest(CONTEXT, "123-45-6789"), EncryptResponse.class)
+                .getBody()
+                .ciphertext();
+        EncryptionContext otherTenant = new EncryptionContext("other-tenant", CONTEXT.field());
 
-    @Test
-    void decryptAcceptsCiphertextSurroundedByWhitespace() {
-        assertThat(decrypt("  " + encrypt("Hello World!") + "  ")).isEqualTo("Hello World!");
-    }
-
-    @Test
-    void decryptReturnsServerErrorForInvalidCiphertext() {
-        assertThat(post("/decrypt", TEXT_PLAIN_UTF8, "invalid-ciphertext").getStatusCode())
+        assertThat(post("/decrypt", new DecryptRequest(otherTenant, ciphertext), String.class)
+                        .getStatusCode())
                 .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @Test
-    void encryptRejectsJsonContentType() {
-        assertThat(post("/encrypt", MediaType.APPLICATION_JSON, "{\"text\":\"Hello\"}")
-                        .getStatusCode())
-                .isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+    void encryptRejectsContextWithSeparatorInTenantId() {
+        String body = "{\"context\":{\"tenantId\":\"acme:ssn\",\"field\":\"x\"},\"plaintext\":\"Hello\"}";
+
+        assertThat(post("/encrypt", body, String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
-    private String encrypt(String plaintext) {
-        return post("/encrypt", TEXT_PLAIN_UTF8, plaintext).getBody();
-    }
-
-    private String decrypt(String ciphertext) {
-        return post("/decrypt", TEXT_PLAIN_UTF8, ciphertext).getBody();
-    }
-
-    private ResponseEntity<String> post(String path, MediaType contentType, String body) {
+    private <T> ResponseEntity<T> post(String path, Object request, Class<T> responseType) {
         return client.post()
                 .uri(path)
-                .contentType(contentType)
-                .body(body)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
                 .retrieve()
-                .toEntity(String.class);
+                .toEntity(responseType);
     }
 }

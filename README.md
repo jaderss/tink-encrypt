@@ -6,6 +6,7 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 
 - **Text Encryption**: Encrypt plain text using AES256-GCM algorithm
 - **Text Decryption**: Decrypt encrypted text back to plain text
+- **Context binding**: Ciphertext is bound to a tenant and field and fails to decrypt anywhere else
 - **Secure**: Uses Google Tink cryptography library for robust security
 - **RESTful API**: Simple HTTP endpoints for easy integration
 - **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
@@ -55,39 +56,39 @@ export ENCRYPT_KEYSET=$(scripts/new-keyset.sh)
 
 ## API Endpoints
 
-### 1. Encrypt Text
-**Endpoint**: `POST /encrypt`  
-**Content-Type**: `text/plain`  
-**Description**: Encrypts plain text and returns Base64 encoded ciphertext
+Both endpoints take and return JSON. Every call carries an encryption context: a tenant id and a field name. The context is bound to the ciphertext as AEAD associated data, so a ciphertext only decrypts with the exact context it was encrypted under. Copying an encrypted SSN from one tenant's record to another, or from the `ssn` field to the `email` field, makes it undecryptable.
 
-**Example Request**:
+Both parts of the context must match `[A-Za-z0-9_.-]{1,64}`. A request with a missing or invalid context is rejected with `400`.
+
+### Encrypt
+
+`POST /encrypt`
+
 ```bash
 curl -X POST http://localhost:8080/encrypt \
-  -H "Content-Type: text/plain" \
-  -d "Hello World!"
+  -H "Content-Type: application/json" \
+  -d '{"context":{"tenantId":"acme","field":"ssn"},"plaintext":"123-45-6789"}'
 ```
 
-**Example Response**:
-```
-ATZwaYkDzds0ltoZ3WuPFVF0/bvdufgvnK6fapQwWe2iv2GK+m+nPiuj3/q4
+```json
+{"ciphertext":"AYMGxMljOb4963+CwguDjHfkdwhGHiw/8kVeMNCYJ5gJZ55g16S+5cXZ4wA="}
 ```
 
-### 2. Decrypt Text
-**Endpoint**: `POST /decrypt`  
-**Content-Type**: `text/plain`  
-**Description**: Decrypts Base64 encoded ciphertext back to plain text
+### Decrypt
 
-**Example Request**:
+`POST /decrypt`
+
 ```bash
 curl -X POST http://localhost:8080/decrypt \
-  -H "Content-Type: text/plain" \
-  -d "ATZwaYkDzds0ltoZ3WuPFVF0/bvdufgvnK6fapQwWe2iv2GK+m+nPiuj3/q4"
+  -H "Content-Type: application/json" \
+  -d '{"context":{"tenantId":"acme","field":"ssn"},"ciphertext":"AYMGxMljOb4963+CwguDjHfkdwhGHiw/8kVeMNCYJ5gJZ55g16S+5cXZ4wA="}'
 ```
 
-**Example Response**:
+```json
+{"plaintext":"123-45-6789"}
 ```
-Hello World!
-```
+
+The same ciphertext sent with `"tenantId":"globex"` or `"field":"email"` fails to decrypt.
 
 ## Testing
 
