@@ -1,20 +1,19 @@
 package dev.jaderss.encrypt.service;
 
 import com.google.crypto.tink.Aead;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
+import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class SecurityService {
 
     private final Aead aead;
+
+    public SecurityService(Aead aead) {
+        this.aead = aead;
+    }
 
     public String encrypt(final String plaintext) throws GeneralSecurityException {
         byte[] ciphertext = aead.encrypt(plaintext.getBytes(StandardCharsets.UTF_8), new byte[0]);

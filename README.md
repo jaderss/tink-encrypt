@@ -12,16 +12,15 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 
 ## Technology Stack
 
-- **Java 24**
-- **Spring Boot 3.5.3**
-- **Google Tink 1.18.0** (Cryptography library)
-- **Maven** (Build tool)
-- **Lombok** (Code generation)
+- **Java 25**
+- **Spring Boot 4.1**
+- **Google Tink 1.24** (Cryptography library)
+- **Maven** (Build tool, wrapper included)
+- **Spotless** with Palantir Java Format
 
 ## Prerequisites
 
-- Java 24 or higher
-- Maven 3.6+ 
+- Java 25
 
 ## Installation & Setup
 

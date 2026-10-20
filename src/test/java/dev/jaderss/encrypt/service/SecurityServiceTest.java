@@ -1,18 +1,17 @@
 package dev.jaderss.encrypt.service;
 
+import static org.assertj.core.api.Assertions.*;
+
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
+import java.security.GeneralSecurityException;
+import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.security.GeneralSecurityException;
-import java.util.Base64;
-
-import static org.assertj.core.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
 class SecurityServiceTest {
@@ -43,8 +42,7 @@ class SecurityServiceTest {
         assertThat(encrypted).isNotEqualTo(plaintext);
 
         // Verify it's valid Base64
-        assertThatCode(() -> Base64.getDecoder().decode(encrypted))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> Base64.getDecoder().decode(encrypted)).doesNotThrowAnyException();
     }
 
     @Test
@@ -157,8 +155,7 @@ class SecurityServiceTest {
         String invalidBase64 = "invalid-base64!@#";
 
         // When & Then
-        assertThatThrownBy(() -> securityService.decrypt(invalidBase64))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> securityService.decrypt(invalidBase64)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -191,14 +188,12 @@ class SecurityServiceTest {
     @Test
     void encrypt_ShouldThrowException_WhenGivenNullInput() {
         // When & Then
-        assertThatThrownBy(() -> securityService.encrypt(null))
-                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> securityService.encrypt(null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void decrypt_ShouldThrowException_WhenGivenNullInput() {
         // When & Then
-        assertThatThrownBy(() -> securityService.decrypt(null))
-                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> securityService.decrypt(null)).isInstanceOf(NullPointerException.class);
     }
 }

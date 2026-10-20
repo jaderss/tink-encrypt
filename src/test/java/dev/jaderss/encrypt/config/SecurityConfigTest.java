@@ -53,7 +53,8 @@ class SecurityConfigTest {
     @Test
     void startupFailsWhenKeysetHoldsNoAeadKey() throws Exception {
         MacConfig.register();
-        String macKeyset = TestKeysetConfig.encode(KeysetHandle.generateNew(PredefinedMacParameters.HMAC_SHA256_128BITTAG));
+        String macKeyset =
+                TestKeysetConfig.encode(KeysetHandle.generateNew(PredefinedMacParameters.HMAC_SHA256_128BITTAG));
 
         contextRunner
                 .withPropertyValues("encrypt.keyset=" + macKeyset)

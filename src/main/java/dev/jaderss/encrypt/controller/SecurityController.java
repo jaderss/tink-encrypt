@@ -1,8 +1,9 @@
 package dev.jaderss.encrypt.controller;
 
 import dev.jaderss.encrypt.service.SecurityService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.security.GeneralSecurityException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,15 +12,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.GeneralSecurityException;
-
-@Slf4j
 @RestController
 @RequestMapping("/")
-@RequiredArgsConstructor
 public class SecurityController {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityController.class);
+
     private final SecurityService securityService;
+
+    public SecurityController(SecurityService securityService) {
+        this.securityService = securityService;
+    }
 
     @PostMapping(value = "/encrypt", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> encrypt(@RequestBody(required = false) String plainText) {

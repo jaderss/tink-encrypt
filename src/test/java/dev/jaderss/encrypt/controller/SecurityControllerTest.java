@@ -1,20 +1,19 @@
 package dev.jaderss.encrypt.controller;
 
-import dev.jaderss.encrypt.service.SecurityService;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-
-import java.security.GeneralSecurityException;
-
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import dev.jaderss.encrypt.service.SecurityService;
+import java.security.GeneralSecurityException;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SecurityController.class)
 class SecurityControllerTest {
@@ -22,7 +21,7 @@ class SecurityControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private SecurityService securityService;
 
     @Test
@@ -33,9 +32,7 @@ class SecurityControllerTest {
         when(securityService.encrypt(plaintext)).thenReturn(expectedEncrypted);
 
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(plaintext))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(plaintext))
                 .andExpect(status().isOk())
                 .andExpect(content().string(expectedEncrypted));
 
@@ -51,9 +48,7 @@ class SecurityControllerTest {
         when(securityService.encrypt(trimmedPlaintext)).thenReturn(expectedEncrypted);
 
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(plaintextWithSpaces))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(plaintextWithSpaces))
                 .andExpect(status().isOk())
                 .andExpect(content().string(expectedEncrypted));
 
@@ -66,9 +61,7 @@ class SecurityControllerTest {
         String emptyString = "";
 
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(emptyString))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(emptyString))
                 .andExpect(status().isBadRequest());
 
         securityService.encrypt(emptyString);
@@ -81,9 +74,7 @@ class SecurityControllerTest {
         when(securityService.encrypt(anyString())).thenThrow(new GeneralSecurityException("Encryption failed"));
 
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(plaintext))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(plaintext))
                 .andExpect(status().isInternalServerError());
 
         verify(securityService).encrypt(plaintext);
@@ -97,9 +88,7 @@ class SecurityControllerTest {
         when(securityService.decrypt(ciphertext)).thenReturn(expectedDecrypted);
 
         // When & Then
-        mockMvc.perform(post("/decrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(ciphertext))
+        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN).content(ciphertext))
                 .andExpect(status().isOk())
                 .andExpect(content().string(expectedDecrypted));
 
@@ -115,9 +104,7 @@ class SecurityControllerTest {
         when(securityService.decrypt(trimmedCiphertext)).thenReturn(expectedDecrypted);
 
         // When & Then
-        mockMvc.perform(post("/decrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(ciphertextWithSpaces))
+        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN).content(ciphertextWithSpaces))
                 .andExpect(status().isOk())
                 .andExpect(content().string(expectedDecrypted));
 
@@ -131,9 +118,7 @@ class SecurityControllerTest {
         when(securityService.decrypt(anyString())).thenThrow(new GeneralSecurityException("Decryption failed"));
 
         // When & Then
-        mockMvc.perform(post("/decrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(ciphertext))
+        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN).content(ciphertext))
                 .andExpect(status().isInternalServerError());
 
         verify(securityService).decrypt(ciphertext);
@@ -142,9 +127,7 @@ class SecurityControllerTest {
     @Test
     void encrypt_ShouldReturn400_WhenNoBodyProvided() throws Exception {
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN))
-                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN)).andExpect(status().isBadRequest());
 
         verify(securityService, never()).encrypt(anyString());
     }
@@ -152,9 +135,7 @@ class SecurityControllerTest {
     @Test
     void decrypt_ShouldReturn400_WhenNoBodyProvided() throws Exception {
         // When & Then
-        mockMvc.perform(post("/decrypt")
-                        .contentType(MediaType.TEXT_PLAIN))
-                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/decrypt").contentType(MediaType.TEXT_PLAIN)).andExpect(status().isBadRequest());
 
         verify(securityService, never()).decrypt(anyString());
     }
@@ -162,9 +143,7 @@ class SecurityControllerTest {
     @Test
     void encrypt_ShouldReturn415_WhenWrongContentType() throws Exception {
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"text\":\"Hello World!\"}"))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Hello World!\"}"))
                 .andExpect(status().isUnsupportedMediaType());
 
         verify(securityService, never()).encrypt(anyString());
@@ -189,9 +168,7 @@ class SecurityControllerTest {
         when(securityService.encrypt(specialChars)).thenReturn(expectedEncrypted);
 
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(specialChars))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(specialChars))
                 .andExpect(status().isOk())
                 .andExpect(content().string(expectedEncrypted));
 
@@ -206,9 +183,7 @@ class SecurityControllerTest {
         when(securityService.encrypt(unicodeText)).thenReturn(expectedEncrypted);
 
         // When & Then
-        mockMvc.perform(post("/encrypt")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(unicodeText))
+        mockMvc.perform(post("/encrypt").contentType(MediaType.TEXT_PLAIN).content(unicodeText))
                 .andExpect(status().isOk())
                 .andExpect(content().string(expectedEncrypted));
 

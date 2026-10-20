@@ -1,17 +1,19 @@
 package dev.jaderss.encrypt.integration;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import dev.jaderss.encrypt.TestKeysetConfig;
-import org.springframework.context.annotation.Import;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.*;
-
 import static org.assertj.core.api.Assertions.*;
 
+import dev.jaderss.encrypt.TestKeysetConfig;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.*;
+
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 @Import(TestKeysetConfig.class)
 class EncryptionIntegrationTest {
 
@@ -34,8 +36,8 @@ class EncryptionIntegrationTest {
 
         // When - Encrypt
         HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", encryptRequest, String.class);
+        ResponseEntity<String> encryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
 
         // Then - Verify encryption
         assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -46,8 +48,8 @@ class EncryptionIntegrationTest {
         // When - Decrypt
         String encryptedText = encryptResponse.getBody();
         HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then - Verify decryption
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -63,8 +65,8 @@ class EncryptionIntegrationTest {
 
         // When - Encrypt
         HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", encryptRequest, String.class);
+        ResponseEntity<String> encryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
 
         // Then - Verify encryption
         assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -75,8 +77,8 @@ class EncryptionIntegrationTest {
         // When - Decrypt
         String encryptedText = encryptResponse.getBody();
         HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then - Verify decryption
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -92,8 +94,8 @@ class EncryptionIntegrationTest {
 
         // When - Encrypt
         HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", encryptRequest, String.class);
+        ResponseEntity<String> encryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
 
         // Then - Verify encryption
         assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -104,8 +106,8 @@ class EncryptionIntegrationTest {
         // When - Decrypt
         String encryptedText = encryptResponse.getBody();
         HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then - Verify decryption
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -125,8 +127,8 @@ class EncryptionIntegrationTest {
 
         // When - Encrypt
         HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", encryptRequest, String.class);
+        ResponseEntity<String> encryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
 
         // Then - Verify encryption
         assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -137,8 +139,8 @@ class EncryptionIntegrationTest {
         // When - Decrypt
         String encryptedText = encryptResponse.getBody();
         HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then - Verify decryption
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -155,8 +157,8 @@ class EncryptionIntegrationTest {
 
         // When - Encrypt
         HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", encryptRequest, String.class);
+        ResponseEntity<String> encryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
 
         // Then - Verify encryption
         assertThat(encryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -166,8 +168,8 @@ class EncryptionIntegrationTest {
         // When - Decrypt to verify trimming occurred
         String encryptedText = encryptResponse.getBody();
         HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedText, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then - Verify decryption returns trimmed text
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -183,15 +185,15 @@ class EncryptionIntegrationTest {
 
         // First encrypt the text
         HttpEntity<String> encryptRequest = new HttpEntity<>(originalText, headers);
-        ResponseEntity<String> encryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", encryptRequest, String.class);
+        ResponseEntity<String> encryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/encrypt", encryptRequest, String.class);
         String encryptedText = encryptResponse.getBody();
 
         // When - Decrypt with whitespace
         String encryptedTextWithSpaces = "  " + encryptedText + "  ";
         HttpEntity<String> decryptRequest = new HttpEntity<>(encryptedTextWithSpaces, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then - Verify decryption works despite whitespace
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -207,8 +209,8 @@ class EncryptionIntegrationTest {
 
         // When
         HttpEntity<String> decryptRequest = new HttpEntity<>(invalidCiphertext, headers);
-        ResponseEntity<String> decryptResponse = restTemplate.postForEntity(
-                getBaseUrl() + "/decrypt", decryptRequest, String.class);
+        ResponseEntity<String> decryptResponse =
+                restTemplate.postForEntity(getBaseUrl() + "/decrypt", decryptRequest, String.class);
 
         // Then
         assertThat(decryptResponse.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -223,8 +225,7 @@ class EncryptionIntegrationTest {
 
         // When
         HttpEntity<String> request = new HttpEntity<>(jsonContent, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                getBaseUrl() + "/encrypt", request, String.class);
+        ResponseEntity<String> response = restTemplate.postForEntity(getBaseUrl() + "/encrypt", request, String.class);
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
