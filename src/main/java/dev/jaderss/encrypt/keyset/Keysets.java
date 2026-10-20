@@ -1,18 +1,23 @@
 package dev.jaderss.encrypt.keyset;
 
+import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.InsecureSecretKeyAccess;
 import com.google.crypto.tink.KeysetHandle;
 import com.google.crypto.tink.Parameters;
 import com.google.crypto.tink.TinkProtoKeysetFormat;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
+import com.google.crypto.tink.integration.awskms.AwsKmsAead;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
 import java.util.Objects;
+import software.amazon.awssdk.services.kms.KmsClient;
 
 public final class Keysets {
 
     private static final Parameters AEAD_PARAMETERS = PredefinedAeadParameters.AES256_GCM;
+    private static final byte[] WRAPPED_KEYSET_LABEL = "tink-encrypt/keyset/v1".getBytes(StandardCharsets.UTF_8);
 
     static {
         try {
@@ -55,18 +60,39 @@ public final class Keysets {
                 .encodeToString(TinkProtoKeysetFormat.serializeKeyset(handle, InsecureSecretKeyAccess.get()));
     }
 
-    public static void main(String[] args) throws GeneralSecurityException {
-        String command = args.length == 1 ? args[0] : "";
-        System.out.println(
-                switch (command) {
-                    case "new" -> generate();
-                    case "rotate" -> rotate(currentKeyset());
-                    case "retire" -> retire(currentKeyset());
-                    default -> throw new IllegalArgumentException("usage: scripts/keyset.sh new|rotate|retire");
-                });
+    public static String wrap(String keyset, Aead keyEncryptionKey) throws GeneralSecurityException {
+        byte[] encrypted =
+                TinkProtoKeysetFormat.serializeEncryptedKeyset(parse(keyset), keyEncryptionKey, WRAPPED_KEYSET_LABEL);
+        return Base64.getEncoder().encodeToString(encrypted);
     }
 
-    private static String currentKeyset() {
-        return Objects.requireNonNull(System.getenv("ENCRYPT_KEYSET"), "ENCRYPT_KEYSET");
+    public static KeysetHandle unwrap(String encryptedKeyset, Aead keyEncryptionKey) throws GeneralSecurityException {
+        return TinkProtoKeysetFormat.parseEncryptedKeyset(
+                Base64.getDecoder().decode(encryptedKeyset), keyEncryptionKey, WRAPPED_KEYSET_LABEL);
+    }
+
+    public static void main(String[] args) throws GeneralSecurityException {
+        String command = args.length == 1 ? args[0] : "";
+        String keyArn = System.getenv("ENCRYPT_KMS_KEY_ARN");
+        try (KmsClient kmsClient = keyArn == null ? null : KmsClient.create()) {
+            Aead keyEncryptionKey = keyArn == null ? null : new AwsKmsAead(kmsClient, keyArn);
+            String keyset = switch (command) {
+                case "new" -> generate();
+                case "rotate" -> rotate(currentKeyset(keyEncryptionKey));
+                case "retire" -> retire(currentKeyset(keyEncryptionKey));
+                default -> throw new IllegalArgumentException("usage: scripts/keyset.sh new|rotate|retire");
+            };
+            System.out.println(keyEncryptionKey == null ? keyset : wrap(keyset, keyEncryptionKey));
+        }
+    }
+
+    private static String currentKeyset(Aead keyEncryptionKey) throws GeneralSecurityException {
+        return keyEncryptionKey == null
+                ? requiredEnv("ENCRYPT_KEYSET")
+                : encode(unwrap(requiredEnv("ENCRYPT_KMS_ENCRYPTED_KEYSET"), keyEncryptionKey));
+    }
+
+    private static String requiredEnv(String name) {
+        return Objects.requireNonNull(System.getenv(name), name);
     }
 }

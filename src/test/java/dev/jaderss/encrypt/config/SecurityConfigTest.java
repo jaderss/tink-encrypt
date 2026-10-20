@@ -62,7 +62,36 @@ class SecurityConfigTest {
     }
 
     @Test
+    void startupFailsWhenBothKeysetAndKmsAreSet() throws Exception {
+        contextRunner
+                .withSystemProperties("aws.region=us-east-1")
+                .withPropertyValues(
+                        "encrypt.keyset=" + Keysets.generate(),
+                        "encrypt.kms.key-arn=arn:aws:kms:us-east-1:000000000000:key/test",
+                        "encrypt.kms.encrypted-keyset=wrapped")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasRootCauseInstanceOf(BindValidationException.class)
+                        .rootCause()
+                        .hasMessageContaining("exactly one"));
+    }
+
+    @Test
+    void startupFailsWhenKmsKeyArnIsBlank() {
+        contextRunner
+                .withSystemProperties("aws.region=us-east-1")
+                .withPropertyValues("encrypt.kms.key-arn= ", "encrypt.kms.encrypted-keyset=wrapped")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasRootCauseInstanceOf(BindValidationException.class)
+                        .rootCause()
+                        .hasMessageContaining("keyArn"));
+    }
+
+    @Test
     void propertiesHideKeysetFromToString() {
-        assertThat(new EncryptProperties("secret-keyset")).hasToString("EncryptProperties[keyset=***]");
+        assertThat(new EncryptProperties("secret-keyset", null)).hasToString("EncryptProperties[keyset=***, kms=null]");
     }
 }

@@ -9,6 +9,7 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 - **Context binding**: Ciphertext is bound to a tenant and field and fails to decrypt anywhere else
 - **Key rotation**: New primary keys without breaking existing ciphertext, plus a re-encrypt endpoint
 - **Per-tenant key derivation**: HKDF through the Java 25 KDF API
+- **Envelope encryption**: Keyset wrapped by an AWS KMS key under the `aws` profile
 - **Secure**: Uses Google Tink cryptography library for robust security
 - **RESTful API**: Simple HTTP endpoints for easy integration
 - **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
@@ -24,6 +25,7 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 ## Prerequisites
 
 - Java 25
+- Docker, for the LocalStack tests
 
 ## Installation & Setup
 
@@ -121,6 +123,24 @@ A Tink keyset holds several keys. The primary key encrypts; every key in the set
    ```
 
 `rotate` and `retire` read the current keyset from `ENCRYPT_KEYSET` and print the new one.
+
+## Envelope encryption with AWS KMS
+
+The keyset holds the data keys. In production it should never sit in an environment variable in cleartext. Under the `aws` profile the service takes the keyset wrapped by an AWS KMS key, the key-encryption key, and asks KMS to unwrap it once at startup. Requests never call KMS, and the data keys never exist outside the process in cleartext.
+
+```bash
+export ENCRYPT_KMS_KEY_ARN=arn:aws:kms:us-east-1:111122223333:key/...
+export ENCRYPT_KMS_ENCRYPTED_KEYSET=$(scripts/keyset.sh new)
+SPRING_PROFILES_ACTIVE=aws ./mvnw spring-boot:run
+```
+
+With `ENCRYPT_KMS_KEY_ARN` set, `scripts/keyset.sh new|rotate|retire` reads `ENCRYPT_KMS_ENCRYPTED_KEYSET` and prints a wrapped keyset, so the cleartext keyset is never printed. The wrapped keyset is bound to the label `tink-encrypt/keyset/v1` as associated data. AWS credentials and region come from the standard AWS SDK chain. The service needs `kms:Decrypt` on the key, and the operator running the script needs `kms:Encrypt` too.
+
+The default profile keeps the cleartext `ENCRYPT_KEYSET` for local development. Setting both key sources, or neither, stops startup.
+
+Tink also offers `KmsEnvelopeAead`, which asks KMS for a new data key on every encryption. That isolates every message but adds a KMS call, with its latency and cost, to each request. Wrapping the keyset gives one KMS call per start, which suits a service that encrypts on every request.
+
+`KmsKeysetIntegrationTest` runs this path against LocalStack through Testcontainers, so the build needs Docker. It is pinned to `localstack/localstack:4.14.0`, the last LocalStack release that runs without an auth token.
 
 ## Per-tenant keys with the Java 25 KDF API
 

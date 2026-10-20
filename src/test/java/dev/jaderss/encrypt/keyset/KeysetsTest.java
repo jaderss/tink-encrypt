@@ -1,7 +1,9 @@
 package dev.jaderss.encrypt.keyset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import java.security.GeneralSecurityException;
 import org.junit.jupiter.api.Test;
@@ -36,5 +38,24 @@ class KeysetsTest {
 
         assertThat(retired.size()).isOne();
         assertThat(retired.getPrimary().getId()).isEqualTo(primaryId);
+    }
+
+    @Test
+    void unwrapRestoresKeysetWrappedWithSameKeyEncryptionKey() throws GeneralSecurityException {
+        Aead keyEncryptionKey = Keysets.parse(Keysets.generate()).getPrimitive(Aead.class);
+        String keyset = Keysets.generate();
+
+        KeysetHandle unwrapped = Keysets.unwrap(Keysets.wrap(keyset, keyEncryptionKey), keyEncryptionKey);
+
+        assertThat(Keysets.encode(unwrapped)).isEqualTo(keyset);
+    }
+
+    @Test
+    void unwrapFailsWithAnotherKeyEncryptionKey() throws GeneralSecurityException {
+        Aead keyEncryptionKey = Keysets.parse(Keysets.generate()).getPrimitive(Aead.class);
+        Aead otherKey = Keysets.parse(Keysets.generate()).getPrimitive(Aead.class);
+        String wrapped = Keysets.wrap(Keysets.generate(), keyEncryptionKey);
+
+        assertThatThrownBy(() -> Keysets.unwrap(wrapped, otherKey)).isInstanceOf(GeneralSecurityException.class);
     }
 }

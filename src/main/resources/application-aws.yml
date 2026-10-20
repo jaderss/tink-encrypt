@@ -1,0 +1,4 @@
+encrypt:
+  kms:
+    key-arn: ${ENCRYPT_KMS_KEY_ARN}
+    encrypted-keyset: ${ENCRYPT_KMS_ENCRYPTED_KEYSET}
