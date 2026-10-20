@@ -1,26 +1,24 @@
 package dev.jaderss.encrypt.config;
 
-import com.google.crypto.tink.BinaryKeysetReader;
-import com.google.crypto.tink.CleartextKeysetHandle;
-import com.google.crypto.tink.KeysetHandle;
+import com.google.crypto.tink.Aead;
+import com.google.crypto.tink.InsecureSecretKeyAccess;
+import com.google.crypto.tink.TinkProtoKeysetFormat;
 import com.google.crypto.tink.aead.AeadConfig;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import java.security.GeneralSecurityException;
+import java.util.Base64;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.util.Base64;
-
-@Configuration
-@Slf4j
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(EncryptProperties.class)
 public class SecurityConfig {
 
     @Bean
-    public KeysetHandle keysetHandle(@Value("${encrypt.key}") String key) throws GeneralSecurityException, IOException {
+    public Aead aead(EncryptProperties properties) throws GeneralSecurityException {
         AeadConfig.register();
-        byte[] plainKey = Base64.getDecoder().decode(key);
-        return CleartextKeysetHandle.read(BinaryKeysetReader.withBytes(plainKey));
+        byte[] keyset = Base64.getDecoder().decode(properties.keyset());
+        return TinkProtoKeysetFormat.parseKeyset(keyset, InsecureSecretKeyAccess.get())
+                .getPrimitive(Aead.class);
     }
 }

@@ -3,4 +3,4 @@ spring:
     name: encrypt
 
 encrypt:
-    key: REDACTED_KEYSET
+  keyset: ${ENCRYPT_KEYSET:}

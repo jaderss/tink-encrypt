@@ -1,39 +1,70 @@
 package dev.jaderss.encrypt.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
+import com.google.crypto.tink.mac.MacConfig;
+import com.google.crypto.tink.mac.PredefinedMacParameters;
+import dev.jaderss.encrypt.TestKeysetConfig;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.context.properties.bind.validation.BindValidationException;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-import static org.assertj.core.api.Assertions.*;
-
-@SpringBootTest
-@TestPropertySource(properties = {
-    "encrypt.key=REDACTED_KEYSET"
-})
 class SecurityConfigTest {
 
-    @Autowired
-    private KeysetHandle keysetHandle;
+    private final ApplicationContextRunner contextRunner =
+            new ApplicationContextRunner().withUserConfiguration(SecurityConfig.class);
 
     @Test
-    void keysetHandle_ShouldBeCreated_WhenValidKeyProvided() {
-        // Then
-        assertThat(keysetHandle).isNotNull();
+    void aeadEncryptsAndDecryptsWithConfiguredKeyset() throws Exception {
+        contextRunner
+                .withPropertyValues("encrypt.keyset=" + TestKeysetConfig.newKeyset())
+                .run(context -> {
+                    Aead aead = context.getBean(Aead.class);
+                    byte[] plaintext = "Test message".getBytes(StandardCharsets.UTF_8);
+                    assertThat(aead.decrypt(aead.encrypt(plaintext, new byte[0]), new byte[0]))
+                            .isEqualTo(plaintext);
+                });
     }
 
     @Test
-    void keysetHandle_ShouldBeUsableForEncryption() throws Exception {
-        // Given
-        com.google.crypto.tink.Aead aead = keysetHandle.getPrimitive(com.google.crypto.tink.Aead.class);
-        String plaintext = "Test message";
+    void startupFailsWhenKeysetIsMissing() {
+        contextRunner.run(context -> assertThat(context)
+                .hasFailed()
+                .getFailure()
+                .hasRootCauseInstanceOf(BindValidationException.class)
+                .rootCause()
+                .hasMessageContaining("keyset"));
+    }
 
-        // When
-        byte[] ciphertext = aead.encrypt(plaintext.getBytes(), new byte[0]);
-        byte[] decrypted = aead.decrypt(ciphertext, new byte[0]);
+    @Test
+    void startupFailsWhenKeysetIsBlank() {
+        contextRunner
+                .withPropertyValues("encrypt.keyset= ")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasRootCauseInstanceOf(BindValidationException.class));
+    }
 
-        // Then
-        assertThat(new String(decrypted)).isEqualTo(plaintext);
+    @Test
+    void startupFailsWhenKeysetHoldsNoAeadKey() throws Exception {
+        MacConfig.register();
+        String macKeyset = TestKeysetConfig.encode(KeysetHandle.generateNew(PredefinedMacParameters.HMAC_SHA256_128BITTAG));
+
+        contextRunner
+                .withPropertyValues("encrypt.keyset=" + macKeyset)
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasRootCauseInstanceOf(GeneralSecurityException.class));
+    }
+
+    @Test
+    void propertiesHideKeysetFromToString() {
+        assertThat(new EncryptProperties("secret-keyset")).hasToString("EncryptProperties[keyset=***]");
     }
 }

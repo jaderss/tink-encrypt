@@ -1,5 +1,6 @@
 package dev.jaderss.encrypt.service;
 
+import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
@@ -26,7 +27,7 @@ class SecurityServiceTest {
         AeadConfig.register();
         // Generate a test key for each test
         keysetHandle = KeysetHandle.generateNew(PredefinedAeadParameters.AES256_GCM);
-        securityService = new SecurityService(keysetHandle);
+        securityService = new SecurityService(keysetHandle.getPrimitive(Aead.class));
     }
 
     @Test

@@ -3,6 +3,8 @@ package dev.jaderss.encrypt.integration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import dev.jaderss.encrypt.TestKeysetConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
@@ -10,6 +12,7 @@ import org.springframework.http.*;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestKeysetConfig.class)
 class EncryptionIntegrationTest {
 
     @LocalServerPort

@@ -46,25 +46,14 @@ The application will start on `http://localhost:8080`
 
 ## Configuration
 
-The application uses a pre-configured encryption key in `src/main/resources/application.yml`:
+The service reads a base64 Tink keyset from the `ENCRYPT_KEYSET` environment variable. It refuses to start without one. No keyset is committed to the repository.
 
-```yaml
-spring:
-  application:
-    name: encrypt
-
-encrypt:
-  key: REDACTED_KEYSET
+```bash
+export ENCRYPT_KEYSET=$(scripts/new-keyset.sh)
+./mvnw spring-boot:run
 ```
 
-### Generating New Keys
-
-You can generate a new encryption key using either:
-
-1. **API Endpoint** (recommended for runtime):
-   ```bash
-   curl -X POST http://localhost:8080/key/generate
-   ```
+`.env.example` lists the variable. Tests generate their own keyset and need no setup.
 
 ## API Endpoints
 
