@@ -19,15 +19,31 @@ public class SecurityService {
     public String encrypt(EncryptionContext context, String plaintext) throws GeneralSecurityException {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(plaintext, "plaintext");
-        byte[] ciphertext = aead.encrypt(plaintext.getBytes(StandardCharsets.UTF_8), context.associatedData());
-        return Base64.getEncoder().encodeToString(ciphertext);
+        CryptoEvent event = new CryptoEvent("encrypt", context);
+        event.begin();
+        try {
+            byte[] ciphertext = aead.encrypt(plaintext.getBytes(StandardCharsets.UTF_8), context.associatedData());
+            event.success = true;
+            return Base64.getEncoder().encodeToString(ciphertext);
+        } finally {
+            event.commit();
+        }
     }
 
-    public String decrypt(EncryptionContext context, String ciphertext) throws GeneralSecurityException {
+    public String decrypt(EncryptionContext context, String ciphertext) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(ciphertext, "ciphertext");
-        byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(ciphertext), context.associatedData());
-        return new String(plaintext, StandardCharsets.UTF_8);
+        CryptoEvent event = new CryptoEvent("decrypt", context);
+        event.begin();
+        try {
+            byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(ciphertext), context.associatedData());
+            event.success = true;
+            return new String(plaintext, StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
+            throw new CiphertextRejectedException(e);
+        } finally {
+            event.commit();
+        }
     }
 
     public String reencrypt(EncryptionContext context, String ciphertext) throws GeneralSecurityException {

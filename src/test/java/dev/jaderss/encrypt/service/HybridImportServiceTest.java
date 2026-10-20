@@ -40,7 +40,7 @@ class HybridImportServiceTest {
         String forEmailField = clientEncrypt("123-45-6789", "acme:email");
 
         assertThatThrownBy(() -> hybridImportService.importCiphertext(CONTEXT, forEmailField))
-                .isInstanceOf(GeneralSecurityException.class);
+                .isInstanceOf(CiphertextRejectedException.class);
     }
 
     @Test

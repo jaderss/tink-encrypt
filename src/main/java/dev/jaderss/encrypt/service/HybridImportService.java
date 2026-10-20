@@ -28,8 +28,12 @@ public class HybridImportService {
     public String importCiphertext(EncryptionContext context, String hybridCiphertext) throws GeneralSecurityException {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(hybridCiphertext, "hybridCiphertext");
-        byte[] plaintext =
-                hybridDecrypt.decrypt(Base64.getDecoder().decode(hybridCiphertext), context.associatedData());
+        byte[] plaintext;
+        try {
+            plaintext = hybridDecrypt.decrypt(Base64.getDecoder().decode(hybridCiphertext), context.associatedData());
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
+            throw new CiphertextRejectedException(e);
+        }
         return securityService.encrypt(context, new String(plaintext, StandardCharsets.UTF_8));
     }
 }

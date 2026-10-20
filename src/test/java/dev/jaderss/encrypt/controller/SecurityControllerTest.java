@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import dev.jaderss.encrypt.request.RequestIdFilter;
+import dev.jaderss.encrypt.service.CiphertextRejectedException;
 import dev.jaderss.encrypt.service.SecurityService;
 import java.security.GeneralSecurityException;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MockMvcTester.MockMvcRequestBuilder;
+import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import tools.jackson.databind.json.JsonMapper;
 
 @WebMvcTest(SecurityController.class)
@@ -70,19 +73,41 @@ class SecurityControllerTest {
     }
 
     @Test
-    void encryptReturnsServerErrorWhenEncryptionFails() throws Exception {
+    void encryptFailureIsServerErrorProblem() throws Exception {
         given(securityService.encrypt(any(), any())).willThrow(new GeneralSecurityException("encrypt failed"));
 
         assertThat(postJson("/encrypt", new PlaintextRequest(CONTEXT, "Hello World!")))
-                .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+                .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                .hasContentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .bodyJson()
+                .extractingPath("$.title")
+                .isEqualTo("Encryption failed");
     }
 
     @Test
-    void decryptReturnsServerErrorWhenDecryptionFails() throws Exception {
-        given(securityService.decrypt(any(), any())).willThrow(new GeneralSecurityException("decrypt failed"));
+    void rejectedCiphertextIsUnprocessableProblemWithRequestId() {
+        given(securityService.decrypt(any(), any()))
+                .willThrow(new CiphertextRejectedException(new GeneralSecurityException("decryption failed")));
 
-        assertThat(postJson("/decrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT)))
-                .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(postJson("/decrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT))
+                        .header(RequestIdFilter.HEADER, "req-42"))
+                .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                .hasHeader(RequestIdFilter.HEADER, "req-42")
+                .bodyJson()
+                .extractingPath("$.requestId")
+                .isEqualTo("req-42");
+    }
+
+    @Test
+    void invalidRequestIdHeaderIsReplacedWithGeneratedId() {
+        given(securityService.decrypt(CONTEXT, CIPHERTEXT)).willReturn("Hello World!");
+
+        MvcTestResult result = postJson("/decrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT))
+                .header(RequestIdFilter.HEADER, "bad id; injected=yes")
+                .exchange();
+
+        assertThat(result).hasStatusOk();
+        assertThat(result.getResponse().getHeader(RequestIdFilter.HEADER)).matches("[0-9a-f-]{36}");
     }
 
     @ParameterizedTest

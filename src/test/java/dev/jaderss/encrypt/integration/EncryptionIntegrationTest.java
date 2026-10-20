@@ -17,6 +17,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
@@ -69,9 +70,14 @@ class EncryptionIntegrationTest {
                 .ciphertext();
         EncryptionContext otherTenant = new EncryptionContext("other-tenant", CONTEXT.field());
 
-        assertThat(post("/decrypt", new CiphertextRequest(otherTenant, ciphertext), String.class)
-                        .getStatusCode())
-                .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        ResponseEntity<ProblemDetail> response =
+                post("/decrypt", new CiphertextRequest(otherTenant, ciphertext), ProblemDetail.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody().getTitle()).isEqualTo("Ciphertext rejected");
+        assertThat(response.getBody().getProperties())
+                .containsEntry("requestId", response.getHeaders().getFirst("X-Request-Id"));
     }
 
     @Test

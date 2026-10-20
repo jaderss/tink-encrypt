@@ -2,7 +2,6 @@ package dev.jaderss.encrypt.service;
 
 import static dev.jaderss.encrypt.Samples.CONTEXT;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -36,7 +35,7 @@ class SecurityServiceTest {
         String ciphertext = securityService.encrypt(CONTEXT, "123-45-6789");
 
         assertThatThrownBy(() -> securityService.decrypt(new EncryptionContext(tenantId, field), ciphertext))
-                .isInstanceOf(GeneralSecurityException.class);
+                .isInstanceOf(CiphertextRejectedException.class);
     }
 
     @Test
@@ -52,7 +51,8 @@ class SecurityServiceTest {
 
     @Test
     void decryptRejectsInvalidBase64() {
-        assertThatIllegalArgumentException().isThrownBy(() -> securityService.decrypt(CONTEXT, "invalid-base64!@#"));
+        assertThatThrownBy(() -> securityService.decrypt(CONTEXT, "invalid-base64!@#"))
+                .isInstanceOf(CiphertextRejectedException.class);
     }
 
     @Test
@@ -60,7 +60,7 @@ class SecurityServiceTest {
         String notCiphertext = Base64.getEncoder().encodeToString("not a ciphertext".getBytes(StandardCharsets.UTF_8));
 
         assertThatThrownBy(() -> securityService.decrypt(CONTEXT, notCiphertext))
-                .isInstanceOf(GeneralSecurityException.class);
+                .isInstanceOf(CiphertextRejectedException.class);
     }
 
     @Test
@@ -68,7 +68,7 @@ class SecurityServiceTest {
         String foreignCiphertext = serviceFor(Keysets.generate()).encrypt(CONTEXT, "Hello World!");
 
         assertThatThrownBy(() -> securityService.decrypt(CONTEXT, foreignCiphertext))
-                .isInstanceOf(GeneralSecurityException.class);
+                .isInstanceOf(CiphertextRejectedException.class);
     }
 
     @Test
@@ -110,7 +110,7 @@ class SecurityServiceTest {
             String ciphertext = rotatedService.encrypt(CONTEXT, "123-45-6789");
 
             assertThatThrownBy(() -> securityService.decrypt(CONTEXT, ciphertext))
-                    .isInstanceOf(GeneralSecurityException.class);
+                    .isInstanceOf(CiphertextRejectedException.class);
         }
 
         @Test
@@ -121,7 +121,7 @@ class SecurityServiceTest {
 
             assertThat(retiredService.decrypt(CONTEXT, reencrypted)).isEqualTo("123-45-6789");
             assertThatThrownBy(() -> retiredService.decrypt(CONTEXT, oldCiphertext))
-                    .isInstanceOf(GeneralSecurityException.class);
+                    .isInstanceOf(CiphertextRejectedException.class);
         }
 
         @Test
@@ -129,7 +129,7 @@ class SecurityServiceTest {
             String ciphertext = securityService.encrypt(CONTEXT, "123-45-6789");
 
             assertThatThrownBy(() -> rotatedService.reencrypt(new EncryptionContext("other-tenant", "ssn"), ciphertext))
-                    .isInstanceOf(GeneralSecurityException.class);
+                    .isInstanceOf(CiphertextRejectedException.class);
         }
     }
 

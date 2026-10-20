@@ -93,7 +93,7 @@ curl -X POST http://localhost:8080/decrypt \
 {"plaintext":"123-45-6789"}
 ```
 
-The same ciphertext sent with `"tenantId":"globex"` or `"field":"email"` fails to decrypt.
+The same ciphertext sent with `"tenantId":"globex"` or `"field":"email"` fails to decrypt with `422`.
 
 ### Re-encrypt
 
@@ -107,6 +107,44 @@ curl -X POST http://localhost:8080/reencrypt \
 
 ```json
 {"ciphertext":"..."}
+```
+
+## Errors, request ids and telemetry
+
+Every error is an RFC 9457 Problem Details body with content type `application/problem+json`.
+
+| Status | When |
+|---|---|
+| `400` | Malformed JSON, a missing field, or a context outside the identifier alphabet |
+| `415` | A content type other than JSON |
+| `422` | A ciphertext that does not decrypt: malformed, moved to another context, or under a retired key |
+| `500` | Encryption itself failed |
+
+The `422` detail is the same for every cause on purpose, so a caller cannot use the error to tell a wrong context from a retired key.
+
+```json
+{"detail":"The ciphertext is malformed, was encrypted under another context, or uses a key this service no longer holds.","instance":"/decrypt","status":422,"title":"Ciphertext rejected","requestId":"demo-2"}
+```
+
+Each request carries a request id. The service takes it from the `X-Request-Id` header when it matches `[A-Za-z0-9._-]{1,64}`, generates a UUID otherwise, echoes it in the response header and adds it to every problem body. Inside the service it travels in a `ScopedValue` (JEP 506) instead of a `ThreadLocal`. The binding ends with the request by construction, so there is no cleanup to forget, and it works the same on virtual threads, which are enabled.
+
+Every encrypt and decrypt emits a JFR event, `dev.jaderss.encrypt.Crypto`, with its duration, operation, tenant, field, request id and outcome. Plaintext and ciphertext are never recorded.
+
+```bash
+java -XX:StartFlightRecording=filename=encrypt.jfr -jar target/encrypt-0.0.1-SNAPSHOT.jar
+jfr print --events dev.jaderss.encrypt.Crypto encrypt.jfr
+```
+
+```
+dev.jaderss.encrypt.Crypto {
+  duration = 0,289 ms
+  operation = "decrypt"
+  tenantId = "globex"
+  field = "ssn"
+  requestId = "demo-2"
+  success = false
+  eventThread = "tomcat-handler-3" (javaThreadId = 59, virtual)
+}
 ```
 
 ## Key rotation

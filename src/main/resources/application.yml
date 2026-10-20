@@ -1,6 +1,9 @@
 spring:
   application:
     name: encrypt
+  threads:
+    virtual:
+      enabled: true
 
 encrypt:
   keyset: ${ENCRYPT_KEYSET:}
