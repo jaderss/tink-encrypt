@@ -1,26 +1,43 @@
 package dev.jaderss.encrypt.config;
 
-import com.google.crypto.tink.BinaryKeysetReader;
-import com.google.crypto.tink.CleartextKeysetHandle;
+import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
-import com.google.crypto.tink.aead.AeadConfig;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import com.google.crypto.tink.integration.awskms.AwsKmsAead;
+import dev.jaderss.encrypt.keyset.Keysets;
+import dev.jaderss.encrypt.service.HybridImportService;
+import dev.jaderss.encrypt.service.SecurityService;
+import java.security.GeneralSecurityException;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.services.kms.KmsClient;
 
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.util.Base64;
-
-@Configuration
-@Slf4j
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(EncryptProperties.class)
 public class SecurityConfig {
 
     @Bean
-    public KeysetHandle keysetHandle(@Value("${encrypt.key}") String key) throws GeneralSecurityException, IOException {
-        AeadConfig.register();
-        byte[] plainKey = Base64.getDecoder().decode(key);
-        return CleartextKeysetHandle.read(BinaryKeysetReader.withBytes(plainKey));
+    public Aead aead(EncryptProperties properties, ObjectProvider<KmsClient> kmsClient)
+            throws GeneralSecurityException {
+        EncryptProperties.Kms kms = properties.kms();
+        KeysetHandle keyset = kms == null
+                ? Keysets.parse(properties.keyset())
+                : Keysets.unwrap(kms.encryptedKeyset(), new AwsKmsAead(kmsClient.getObject(), kms.keyArn()));
+        return keyset.getPrimitive(Aead.class);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "encrypt", name = "hybrid-keyset")
+    public HybridImportService hybridImportService(EncryptProperties properties, SecurityService securityService)
+            throws GeneralSecurityException {
+        return new HybridImportService(Keysets.parse(properties.hybridKeyset()), securityService);
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(prefix = "encrypt.kms", name = "key-arn")
+    public KmsClient kmsClient() {
+        return KmsClient.create();
     }
 }

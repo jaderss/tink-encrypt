@@ -1,15 +1,28 @@
-### Encrypt plain text
+### Encrypt an SSN for tenant acme
 POST http://localhost:8080/encrypt
-Content-Type: text/plain
+Content-Type: application/json
 
-Hello World!
+{"context": {"tenantId": "acme", "field": "ssn"}, "plaintext": "123-45-6789"}
 
-### Decrypt cipher text
+> {% client.global.set("ciphertext", response.body.ciphertext); %}
+
+### Decrypt it in the same context
 POST http://localhost:8080/decrypt
-Content-Type: text/plain
+Content-Type: application/json
 
-ATZwaYkDzds0ltoZ3WuPFVF0/bvdufgvnK6fapQwWe2iv2GK+m+nPiuj3/q4
+{"context": {"tenantId": "acme", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}
 
-### Generate new encryption key
-POST http://localhost:8080/key/generate
-Content-Type: text/plain
+### Decrypting under another tenant fails
+POST http://localhost:8080/decrypt
+Content-Type: application/json
+
+{"context": {"tenantId": "globex", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}
+
+### Re-encrypt under the current primary key
+POST http://localhost:8080/reencrypt
+Content-Type: application/json
+
+{"context": {"tenantId": "acme", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}
+
+### Fetch the hybrid public key (hybrid profile)
+GET http://localhost:8080/hybrid/public-key

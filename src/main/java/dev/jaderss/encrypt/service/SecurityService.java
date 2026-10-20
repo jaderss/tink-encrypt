@@ -1,45 +1,52 @@
 package dev.jaderss.encrypt.service;
 
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.BinaryKeysetWriter;
-import com.google.crypto.tink.CleartextKeysetHandle;
-import com.google.crypto.tink.KeysetHandle;
-import com.google.crypto.tink.aead.AeadConfig;
-import com.google.crypto.tink.aead.PredefinedAeadParameters;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
+import java.util.Objects;
+import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class SecurityService {
 
-    private final KeysetHandle keysetHandle;
+    private final Aead aead;
 
-    public String encrypt(final String plaintext) throws GeneralSecurityException {
-        Aead aead = keysetHandle.getPrimitive(Aead.class);
-        byte[] ciphertext = aead.encrypt(plaintext.getBytes(StandardCharsets.UTF_8), new byte[0]);
-        return Base64.getEncoder().encodeToString(ciphertext);
+    public SecurityService(Aead aead) {
+        this.aead = aead;
     }
 
-    public String decrypt(final String ciphertext) throws GeneralSecurityException {
-        Aead aead = keysetHandle.getPrimitive(Aead.class);
-        byte[] decrypted = aead.decrypt(Base64.getDecoder().decode(ciphertext), new byte[0]);
-        return new String(decrypted, StandardCharsets.UTF_8);
+    public String encrypt(EncryptionContext context, String plaintext) throws GeneralSecurityException {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(plaintext, "plaintext");
+        CryptoEvent event = new CryptoEvent("encrypt", context);
+        event.begin();
+        try {
+            byte[] ciphertext = aead.encrypt(plaintext.getBytes(StandardCharsets.UTF_8), context.associatedData());
+            event.success = true;
+            return Base64.getEncoder().encodeToString(ciphertext);
+        } finally {
+            event.commit();
+        }
     }
 
-    public String generateKey() throws GeneralSecurityException, IOException {
-        AeadConfig.register();
-        KeysetHandle handle = KeysetHandle.generateNew(PredefinedAeadParameters.AES256_GCM);
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        CleartextKeysetHandle.write(handle, BinaryKeysetWriter.withOutputStream(outputStream));
-        return Base64.getEncoder().encodeToString(outputStream.toByteArray());
+    public String decrypt(EncryptionContext context, String ciphertext) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(ciphertext, "ciphertext");
+        CryptoEvent event = new CryptoEvent("decrypt", context);
+        event.begin();
+        try {
+            byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(ciphertext), context.associatedData());
+            event.success = true;
+            return new String(plaintext, StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
+            throw new CiphertextRejectedException(e);
+        } finally {
+            event.commit();
+        }
+    }
+
+    public String reencrypt(EncryptionContext context, String ciphertext) throws GeneralSecurityException {
+        return encrypt(context, decrypt(context, ciphertext));
     }
 }
