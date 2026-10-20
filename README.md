@@ -7,6 +7,8 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 - **Text Encryption**: Encrypt plain text using AES256-GCM algorithm
 - **Text Decryption**: Decrypt encrypted text back to plain text
 - **Context binding**: Ciphertext is bound to a tenant and field and fails to decrypt anywhere else
+- **Key rotation**: New primary keys without breaking existing ciphertext, plus a re-encrypt endpoint
+- **Per-tenant key derivation**: HKDF through the Java 25 KDF API
 - **Secure**: Uses Google Tink cryptography library for robust security
 - **RESTful API**: Simple HTTP endpoints for easy integration
 - **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
@@ -119,6 +121,35 @@ A Tink keyset holds several keys. The primary key encrypts; every key in the set
    ```
 
 `rotate` and `retire` read the current keyset from `ENCRYPT_KEYSET` and print the new one.
+
+## Per-tenant keys with the Java 25 KDF API
+
+`TenantKeyDerivation` derives a separate AES-256-GCM key for each tenant from one master secret, using HKDF-SHA256 through `javax.crypto.KDF`, the key derivation API that became final in Java 25 (JEP 510).
+
+- Input key material: the master secret, at least 32 bytes.
+- Salt: random bytes chosen once per deployment and stored next to the master secret.
+- Info: `tink-encrypt/tenant-data-key/v1`, a zero byte, then the tenant id. The version in the label lets a future scheme derive different keys from the same secret.
+- Output: 32 bytes, imported into Tink as an AES-GCM key and returned as an `Aead`.
+
+The same inputs always produce the same key, so no per-tenant key is stored anywhere. A test checks the HKDF wiring against test case 1 of RFC 5869, so swapping salt and key material, an easy mistake with this API, fails the build.
+
+The trade-offs are real. Losing the master secret loses every tenant. You cannot destroy one tenant's key to make their data unreadable without changing the master secret for everyone. Use stored per-tenant keysets if you need per-tenant crypto-shredding.
+
+This component is not on the HTTP path. The endpoints keep using the Tink keyset from `ENCRYPT_KEYSET`.
+
+### JDK KDF or Tink key derivation
+
+Tink has its own derivation primitive, `KeysetDeriver`, built on a PRF-based key derivation keyset. It returns a complete Tink keyset for a given salt.
+
+| | `javax.crypto.KDF` (JDK 25) | Tink `KeysetDeriver` |
+|---|---|---|
+| Master secret | Raw bytes you store and protect yourself | A Tink keyset, stored and rotated like any other |
+| Output | Bytes or a `SecretKey`; you pick the cipher and the format | A `KeysetHandle` with key ids and Tink's ciphertext format |
+| Rotation | Version the info label or the master secret by hand | Normal keyset rotation |
+| Interoperability | Standard RFC 5869; any language with HKDF reproduces the key | Tink's own scheme; reproducible from Tink in other languages |
+| Dependency | None beyond the JDK | Tink |
+
+Use the JDK API when the derived key has to match a system outside Tink, when a protocol specifies HKDF directly, or when you want no crypto library at all. Use Tink's `KeysetDeriver` when the derived keys stay inside Tink, because you get key ids, rotation and Tink's safe defaults without writing the glue code this component needs.
 
 ## Testing
 
