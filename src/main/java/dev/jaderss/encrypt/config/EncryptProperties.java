@@ -8,7 +8,7 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @ConfigurationProperties(prefix = "encrypt")
-public record EncryptProperties(String keyset, @Valid Kms kms) {
+public record EncryptProperties(String keyset, @Valid Kms kms, String hybridKeyset) {
 
     public record Kms(@NotBlank String keyArn, @NotBlank String encryptedKeyset) {}
 
@@ -20,6 +20,6 @@ public record EncryptProperties(String keyset, @Valid Kms kms) {
 
     @Override
     public String toString() {
-        return "EncryptProperties[keyset=***, kms=" + kms + "]";
+        return "EncryptProperties[keyset=***, kms=" + kms + ", hybridKeyset=***]";
     }
 }

@@ -23,3 +23,6 @@ POST http://localhost:8080/reencrypt
 Content-Type: application/json
 
 {"context": {"tenantId": "acme", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}
+
+### Fetch the hybrid public key (hybrid profile)
+GET http://localhost:8080/hybrid/public-key

@@ -10,6 +10,7 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 - **Key rotation**: New primary keys without breaking existing ciphertext, plus a re-encrypt endpoint
 - **Per-tenant key derivation**: HKDF through the Java 25 KDF API
 - **Envelope encryption**: Keyset wrapped by an AWS KMS key under the `aws` profile
+- **Hybrid encryption**: HPKE public key for client-side encryption, exportable as PEM
 - **Secure**: Uses Google Tink cryptography library for robust security
 - **RESTful API**: Simple HTTP endpoints for easy integration
 - **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
@@ -141,6 +142,31 @@ The default profile keeps the cleartext `ENCRYPT_KEYSET` for local development. 
 Tink also offers `KmsEnvelopeAead`, which asks KMS for a new data key on every encryption. That isolates every message but adds a KMS call, with its latency and cost, to each request. Wrapping the keyset gives one KMS call per start, which suits a service that encrypts on every request.
 
 `KmsKeysetIntegrationTest` runs this path against LocalStack through Testcontainers, so the build needs Docker. It is pinned to `localstack/localstack:4.14.0`, the last LocalStack release that runs without an auth token.
+
+## Hybrid encryption for client-side encryption
+
+Some values should be encrypted before they reach the service, for example an SSN typed into a browser. Under the `hybrid` profile the service publishes an HPKE public key (X25519, HKDF-SHA256, AES-256-GCM). A client encrypts to it, and the service converts the result into its normal context-bound storage ciphertext. The plaintext is never returned over HTTP.
+
+```bash
+export ENCRYPT_HYBRID_KEYSET=$(scripts/keyset.sh new-hybrid)
+SPRING_PROFILES_ACTIVE=hybrid ./mvnw spring-boot:run
+```
+
+- `GET /hybrid/public-key` returns `{"publicKeyset":"..."}`, a Tink public keyset with no private key in it.
+- `POST /hybrid/import` takes `{"context":{...},"ciphertext":"<base64 HPKE ciphertext>"}` and returns `{"ciphertext":"..."}`, the same format `/encrypt` produces.
+
+The client must pass `tenantId:field` in UTF-8 as the HPKE context info, matching the request's `context`. A value encrypted for `acme:email` fails to import as `acme:ssn`. Without the `hybrid` profile the two endpoints do not exist.
+
+### Public key as PEM (Java 25 preview)
+
+`PublicKeyPem` exports the X25519 public key as a standard `-----BEGIN PUBLIC KEY-----` block with the PEM API from JEP 470. That API is a preview feature in Java 25, so the code lives in `src/preview/java` and only compiles under its own Maven profile, with output in `target/preview`. The main build and the application jar never depend on a preview feature.
+
+```bash
+ENCRYPT_HYBRID_KEYSET=... scripts/public-key-pem.sh
+./mvnw verify -Ppem-preview
+```
+
+OpenSSL reads the result as an `X25519 Public-Key`. PEM helps a client that does not use Tink. Such a client implements RFC 9180 itself and must put Tink's 5-byte key prefix (`0x01` and the key id) in front of its ciphertext, because the keyset uses Tink's `TINK` output variant.
 
 ## Per-tenant keys with the Java 25 KDF API
 

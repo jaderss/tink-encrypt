@@ -81,6 +81,9 @@
                 <version>${spotless.version}</version>
                 <configuration>
                     <java>
+                        <includes>
+                            <include>src/*/java/**/*.java</include>
+                        </includes>
                         <palantirJavaFormat>
                             <version>${palantir-java-format.version}</version>
                         </palantirJavaFormat>
@@ -97,4 +100,56 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>pem-preview</id>
+            <build>
+                <directory>${project.basedir}/target/preview</directory>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>add-preview-sources</id>
+                                <goals>
+                                    <goal>add-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>src/preview/java</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>add-preview-test-sources</id>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>src/preview-test/java</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <enablePreview>true</enablePreview>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>--enable-preview</argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

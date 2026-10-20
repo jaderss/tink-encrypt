@@ -92,6 +92,7 @@ class SecurityConfigTest {
 
     @Test
     void propertiesHideKeysetFromToString() {
-        assertThat(new EncryptProperties("secret-keyset", null)).hasToString("EncryptProperties[keyset=***, kms=null]");
+        assertThat(new EncryptProperties("secret-keyset", null, "secret-hybrid"))
+                .hasToString("EncryptProperties[keyset=***, kms=null, hybridKeyset=***]");
     }
 }

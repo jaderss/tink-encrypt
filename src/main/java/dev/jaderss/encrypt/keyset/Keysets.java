@@ -7,6 +7,8 @@ import com.google.crypto.tink.Parameters;
 import com.google.crypto.tink.TinkProtoKeysetFormat;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
+import com.google.crypto.tink.hybrid.HpkeParameters;
+import com.google.crypto.tink.hybrid.HybridConfig;
 import com.google.crypto.tink.integration.awskms.AwsKmsAead;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -22,6 +24,7 @@ public final class Keysets {
     static {
         try {
             AeadConfig.register();
+            HybridConfig.register();
         } catch (GeneralSecurityException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -31,6 +34,23 @@ public final class Keysets {
 
     public static String generate() throws GeneralSecurityException {
         return encode(KeysetHandle.generateNew(AEAD_PARAMETERS));
+    }
+
+    public static String generateHybrid() throws GeneralSecurityException {
+        return encode(KeysetHandle.generateNew(HpkeParameters.builder()
+                .setKemId(HpkeParameters.KemId.DHKEM_X25519_HKDF_SHA256)
+                .setKdfId(HpkeParameters.KdfId.HKDF_SHA256)
+                .setAeadId(HpkeParameters.AeadId.AES_256_GCM)
+                .setVariant(HpkeParameters.Variant.TINK)
+                .build()));
+    }
+
+    public static String publicKeyset(String hybridKeyset) throws GeneralSecurityException {
+        return encodePublic(parse(hybridKeyset).getPublicKeysetHandle());
+    }
+
+    public static String encodePublic(KeysetHandle publicKeyset) throws GeneralSecurityException {
+        return Base64.getEncoder().encodeToString(TinkProtoKeysetFormat.serializeKeysetWithoutSecret(publicKeyset));
     }
 
     public static String rotate(String keyset) throws GeneralSecurityException {
@@ -73,6 +93,14 @@ public final class Keysets {
 
     public static void main(String[] args) throws GeneralSecurityException {
         String command = args.length == 1 ? args[0] : "";
+        switch (command) {
+            case "new-hybrid" -> System.out.println(generateHybrid());
+            case "public-key" -> System.out.println(publicKeyset(requiredEnv("ENCRYPT_HYBRID_KEYSET")));
+            default -> System.out.println(runAeadCommand(command));
+        }
+    }
+
+    private static String runAeadCommand(String command) throws GeneralSecurityException {
         String keyArn = System.getenv("ENCRYPT_KMS_KEY_ARN");
         try (KmsClient kmsClient = keyArn == null ? null : KmsClient.create()) {
             Aead keyEncryptionKey = keyArn == null ? null : new AwsKmsAead(kmsClient, keyArn);
@@ -80,9 +108,11 @@ public final class Keysets {
                 case "new" -> generate();
                 case "rotate" -> rotate(currentKeyset(keyEncryptionKey));
                 case "retire" -> retire(currentKeyset(keyEncryptionKey));
-                default -> throw new IllegalArgumentException("usage: scripts/keyset.sh new|rotate|retire");
+                default ->
+                    throw new IllegalArgumentException(
+                            "usage: scripts/keyset.sh new|rotate|retire|new-hybrid|public-key");
             };
-            System.out.println(keyEncryptionKey == null ? keyset : wrap(keyset, keyEncryptionKey));
+            return keyEncryptionKey == null ? keyset : wrap(keyset, keyEncryptionKey);
         }
     }
 

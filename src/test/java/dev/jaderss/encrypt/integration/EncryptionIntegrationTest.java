@@ -81,6 +81,16 @@ class EncryptionIntegrationTest {
         assertThat(post("/encrypt", body, String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    @Test
+    void hybridEndpointsAreAbsentWithoutHybridKeyset() {
+        assertThat(client.get()
+                        .uri("/hybrid/public-key")
+                        .retrieve()
+                        .toBodilessEntity()
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private <T> ResponseEntity<T> post(String path, Object request, Class<T> responseType) {
         return client.post()
                 .uri(path)

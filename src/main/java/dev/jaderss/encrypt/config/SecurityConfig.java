@@ -4,6 +4,8 @@ import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import com.google.crypto.tink.integration.awskms.AwsKmsAead;
 import dev.jaderss.encrypt.keyset.Keysets;
+import dev.jaderss.encrypt.service.HybridImportService;
+import dev.jaderss.encrypt.service.SecurityService;
 import java.security.GeneralSecurityException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,6 +26,13 @@ public class SecurityConfig {
                 ? Keysets.parse(properties.keyset())
                 : Keysets.unwrap(kms.encryptedKeyset(), new AwsKmsAead(kmsClient.getObject(), kms.keyArn()));
         return keyset.getPrimitive(Aead.class);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "encrypt", name = "hybrid-keyset")
+    public HybridImportService hybridImportService(EncryptProperties properties, SecurityService securityService)
+            throws GeneralSecurityException {
+        return new HybridImportService(Keysets.parse(properties.hybridKeyset()), securityService);
     }
 
     @Bean(destroyMethod = "close")
