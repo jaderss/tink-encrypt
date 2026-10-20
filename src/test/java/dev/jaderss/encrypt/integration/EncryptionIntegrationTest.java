@@ -215,36 +215,6 @@ class EncryptionIntegrationTest {
     }
 
     @Test
-    void generateKey_ShouldReturnValidKey() {
-        // When
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                getBaseUrl() + "/key/generate", null, String.class);
-
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).isNotEmpty();
-        
-        // Verify it's valid Base64
-        assertThatCode(() -> java.util.Base64.getDecoder().decode(response.getBody()))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    void generateKey_ShouldReturnDifferentKeys_OnMultipleCalls() {
-        // When
-        ResponseEntity<String> response1 = restTemplate.postForEntity(
-                getBaseUrl() + "/key/generate", null, String.class);
-        ResponseEntity<String> response2 = restTemplate.postForEntity(
-                getBaseUrl() + "/key/generate", null, String.class);
-
-        // Then
-        assertThat(response1.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response2.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response1.getBody()).isNotEqualTo(response2.getBody());
-    }
-
-    @Test
     void encrypt_ShouldReturn415_WhenWrongContentType() {
         // Given
         String jsonContent = "{\"text\":\"Hello World!\"}";

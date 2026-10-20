@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 @Slf4j
@@ -46,16 +45,6 @@ public class SecurityController {
             return ResponseEntity.ok(decryptedText);
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @PostMapping(value = "/key/generate", produces = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<String> generateKey() {
-        try {
-            return ResponseEntity.ok(securityService.generateKey());
-        } catch (GeneralSecurityException | IOException e) {
-            log.error("Key generation failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

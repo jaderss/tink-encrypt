@@ -10,7 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.security.GeneralSecurityException;
-import java.io.IOException;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.*;
@@ -170,30 +169,6 @@ class SecurityServiceTest {
         // When & Then
         assertThatThrownBy(() -> securityService.decrypt(invalidCiphertext))
                 .isInstanceOf(GeneralSecurityException.class);
-    }
-
-    @Test
-    void generateKey_ShouldReturnValidBase64EncodedKey() throws GeneralSecurityException, IOException {
-        // When
-        String generatedKey = securityService.generateKey();
-
-        // Then
-        assertThat(generatedKey).isNotNull();
-        assertThat(generatedKey).isNotEmpty();
-
-        // Verify it's valid Base64
-        assertThatCode(() -> Base64.getDecoder().decode(generatedKey))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    void generateKey_ShouldReturnDifferentKeys_OnMultipleCalls() throws GeneralSecurityException, IOException {
-        // When
-        String key1 = securityService.generateKey();
-        String key2 = securityService.generateKey();
-
-        // Then
-        assertThat(key1).isNotEqualTo(key2);
     }
 
     @Test

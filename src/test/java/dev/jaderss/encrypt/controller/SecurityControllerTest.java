@@ -8,7 +8,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 import static org.mockito.ArgumentMatchers.anyString;
@@ -138,44 +137,6 @@ class SecurityControllerTest {
                 .andExpect(status().isInternalServerError());
 
         verify(securityService).decrypt(ciphertext);
-    }
-
-    @Test
-    void generateKey_ShouldReturnNewKey_WhenCalled() throws Exception {
-        // Given
-        String expectedKey = "new-generated-key-base64";
-        when(securityService.generateKey()).thenReturn(expectedKey);
-
-        // When & Then
-        mockMvc.perform(post("/key/generate"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(expectedKey));
-
-        verify(securityService).generateKey();
-    }
-
-    @Test
-    void generateKey_ShouldReturnInternalServerError_WhenServiceThrowsGeneralSecurityException() throws Exception {
-        // Given
-        when(securityService.generateKey()).thenThrow(new GeneralSecurityException("Key generation failed"));
-
-        // When & Then
-        mockMvc.perform(post("/key/generate"))
-                .andExpect(status().isInternalServerError());
-
-        verify(securityService).generateKey();
-    }
-
-    @Test
-    void generateKey_ShouldReturnInternalServerError_WhenServiceThrowsIOException() throws Exception {
-        // Given
-        when(securityService.generateKey()).thenThrow(new IOException("IO error during key generation"));
-
-        // When & Then
-        mockMvc.perform(post("/key/generate"))
-                .andExpect(status().isInternalServerError());
-
-        verify(securityService).generateKey();
     }
 
     @Test

@@ -6,7 +6,6 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 
 - **Text Encryption**: Encrypt plain text using AES256-GCM algorithm
 - **Text Decryption**: Decrypt encrypted text back to plain text
-- **Key Generation**: Generate new encryption keys dynamically
 - **Secure**: Uses Google Tink cryptography library for robust security
 - **RESTful API**: Simple HTTP endpoints for easy integration
 - **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
@@ -91,21 +90,6 @@ curl -X POST http://localhost:8080/decrypt \
 Hello World!
 ```
 
-### 3. Generate New Key
-**Endpoint**: `POST /key/generate`  
-**Content-Type**: `text/plain`  
-**Description**: Generates a new AES256-GCM encryption key
-
-**Example Request**:
-```bash
-curl -X POST http://localhost:8080/key/generate
-```
-
-**Example Response**:
-```
-REDACTED_KEYSET
-```
-
 ## Testing
 
 The project includes sample HTTP requests in `http/sample.http` that can be used with HTTP clients like IntelliJ IDEA, VS Code REST Client, or similar tools.
@@ -117,7 +101,7 @@ The project includes sample HTTP requests in `http/sample.http` that can be used
 
 ## Security Considerations
 
-- **Key Management**: The encryption key is stored in the application configuration. For production use, consider using environment variables or a secure key management service.
+- **Key Management**: The keyset comes from the `ENCRYPT_KEYSET` environment variable and is created offline with `scripts/new-keyset.sh`. The service never generates or returns keys over HTTP.
 - **HTTPS**: Always use HTTPS in production to protect data in transit.
 - **Key Rotation**: Regularly rotate encryption keys for enhanced security.
 - **Access Control**: Implement proper authentication and authorization for the API endpoints.
