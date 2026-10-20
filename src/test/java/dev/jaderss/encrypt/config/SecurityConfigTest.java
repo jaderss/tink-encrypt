@@ -6,7 +6,7 @@ import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import com.google.crypto.tink.mac.MacConfig;
 import com.google.crypto.tink.mac.PredefinedMacParameters;
-import dev.jaderss.encrypt.TestKeysetConfig;
+import dev.jaderss.encrypt.keyset.Keysets;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import org.junit.jupiter.api.Test;
@@ -20,14 +20,12 @@ class SecurityConfigTest {
 
     @Test
     void aeadEncryptsAndDecryptsWithConfiguredKeyset() throws Exception {
-        contextRunner
-                .withPropertyValues("encrypt.keyset=" + TestKeysetConfig.newKeyset())
-                .run(context -> {
-                    Aead aead = context.getBean(Aead.class);
-                    byte[] plaintext = "Test message".getBytes(StandardCharsets.UTF_8);
-                    assertThat(aead.decrypt(aead.encrypt(plaintext, new byte[0]), new byte[0]))
-                            .isEqualTo(plaintext);
-                });
+        contextRunner.withPropertyValues("encrypt.keyset=" + Keysets.generate()).run(context -> {
+            Aead aead = context.getBean(Aead.class);
+            byte[] plaintext = "Test message".getBytes(StandardCharsets.UTF_8);
+            assertThat(aead.decrypt(aead.encrypt(plaintext, new byte[0]), new byte[0]))
+                    .isEqualTo(plaintext);
+        });
     }
 
     @Test
@@ -53,8 +51,7 @@ class SecurityConfigTest {
     @Test
     void startupFailsWhenKeysetHoldsNoAeadKey() throws Exception {
         MacConfig.register();
-        String macKeyset =
-                TestKeysetConfig.encode(KeysetHandle.generateNew(PredefinedMacParameters.HMAC_SHA256_128BITTAG));
+        String macKeyset = Keysets.encode(KeysetHandle.generateNew(PredefinedMacParameters.HMAC_SHA256_128BITTAG));
 
         contextRunner
                 .withPropertyValues("encrypt.keyset=" + macKeyset)

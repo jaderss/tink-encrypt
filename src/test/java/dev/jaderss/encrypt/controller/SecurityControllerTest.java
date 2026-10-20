@@ -40,7 +40,7 @@ class SecurityControllerTest {
     void encryptReturnsCiphertextForContextAndPlaintext(String plaintext) throws Exception {
         given(securityService.encrypt(CONTEXT, plaintext)).willReturn(CIPHERTEXT);
 
-        assertThat(postJson("/encrypt", new EncryptRequest(CONTEXT, plaintext)))
+        assertThat(postJson("/encrypt", new PlaintextRequest(CONTEXT, plaintext)))
                 .hasStatusOk()
                 .bodyJson()
                 .extractingPath("$.ciphertext")
@@ -51,7 +51,7 @@ class SecurityControllerTest {
     void decryptReturnsPlaintextForContextAndCiphertext() throws Exception {
         given(securityService.decrypt(CONTEXT, CIPHERTEXT)).willReturn("Hello World!");
 
-        assertThat(postJson("/decrypt", new DecryptRequest(CONTEXT, CIPHERTEXT)))
+        assertThat(postJson("/decrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT)))
                 .hasStatusOk()
                 .bodyJson()
                 .extractingPath("$.plaintext")
@@ -59,10 +59,21 @@ class SecurityControllerTest {
     }
 
     @Test
+    void reencryptReturnsCiphertextUnderCurrentKey() throws Exception {
+        given(securityService.reencrypt(CONTEXT, CIPHERTEXT)).willReturn("ciphertext-under-new-key");
+
+        assertThat(postJson("/reencrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT)))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.ciphertext")
+                .isEqualTo("ciphertext-under-new-key");
+    }
+
+    @Test
     void encryptReturnsServerErrorWhenEncryptionFails() throws Exception {
         given(securityService.encrypt(any(), any())).willThrow(new GeneralSecurityException("encrypt failed"));
 
-        assertThat(postJson("/encrypt", new EncryptRequest(CONTEXT, "Hello World!")))
+        assertThat(postJson("/encrypt", new PlaintextRequest(CONTEXT, "Hello World!")))
                 .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
@@ -70,7 +81,7 @@ class SecurityControllerTest {
     void decryptReturnsServerErrorWhenDecryptionFails() throws Exception {
         given(securityService.decrypt(any(), any())).willThrow(new GeneralSecurityException("decrypt failed"));
 
-        assertThat(postJson("/decrypt", new DecryptRequest(CONTEXT, CIPHERTEXT)))
+        assertThat(postJson("/decrypt", new CiphertextRequest(CONTEXT, CIPHERTEXT)))
                 .hasStatus(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
@@ -93,7 +104,7 @@ class SecurityControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/encrypt", "/decrypt"})
+    @ValueSource(strings = {"/encrypt", "/decrypt", "/reencrypt"})
     void rejectsPlainTextContentTypeWithoutCallingService(String path) {
         assertThat(mvc.post().uri(path).contentType(MediaType.TEXT_PLAIN).content("Hello"))
                 .hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);

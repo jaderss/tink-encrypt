@@ -7,10 +7,12 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.crypto.tink.Aead;
-import dev.jaderss.encrypt.TestKeysetConfig;
+import dev.jaderss.encrypt.keyset.Keysets;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
+import java.util.concurrent.Callable;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -18,7 +20,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 class SecurityServiceTest {
 
-    private final SecurityService securityService = newService();
+    private final String keyset = unchecked(Keysets::generate);
+    private final SecurityService securityService = serviceFor(keyset);
 
     @ParameterizedTest
     @MethodSource("dev.jaderss.encrypt.Samples#plaintexts")
@@ -62,7 +65,7 @@ class SecurityServiceTest {
 
     @Test
     void decryptRejectsCiphertextFromAnotherKeyset() throws GeneralSecurityException {
-        String foreignCiphertext = newService().encrypt(CONTEXT, "Hello World!");
+        String foreignCiphertext = serviceFor(Keysets.generate()).encrypt(CONTEXT, "Hello World!");
 
         assertThatThrownBy(() -> securityService.decrypt(CONTEXT, foreignCiphertext))
                 .isInstanceOf(GeneralSecurityException.class);
@@ -89,10 +92,55 @@ class SecurityServiceTest {
                 .withMessage("ciphertext");
     }
 
-    private static SecurityService newService() {
+    @Nested
+    class KeyRotation {
+
+        private final String rotatedKeyset = unchecked(() -> Keysets.rotate(keyset));
+        private final SecurityService rotatedService = serviceFor(rotatedKeyset);
+
+        @Test
+        void ciphertextFromBeforeRotationStillDecrypts() throws GeneralSecurityException {
+            String ciphertext = securityService.encrypt(CONTEXT, "123-45-6789");
+
+            assertThat(rotatedService.decrypt(CONTEXT, ciphertext)).isEqualTo("123-45-6789");
+        }
+
+        @Test
+        void newCiphertextIsEncryptedWithNewPrimaryKey() throws GeneralSecurityException {
+            String ciphertext = rotatedService.encrypt(CONTEXT, "123-45-6789");
+
+            assertThatThrownBy(() -> securityService.decrypt(CONTEXT, ciphertext))
+                    .isInstanceOf(GeneralSecurityException.class);
+        }
+
+        @Test
+        void reencryptedCiphertextSurvivesRetiringOldKeys() throws GeneralSecurityException {
+            String oldCiphertext = securityService.encrypt(CONTEXT, "123-45-6789");
+            String reencrypted = rotatedService.reencrypt(CONTEXT, oldCiphertext);
+            SecurityService retiredService = serviceFor(Keysets.retire(rotatedKeyset));
+
+            assertThat(retiredService.decrypt(CONTEXT, reencrypted)).isEqualTo("123-45-6789");
+            assertThatThrownBy(() -> retiredService.decrypt(CONTEXT, oldCiphertext))
+                    .isInstanceOf(GeneralSecurityException.class);
+        }
+
+        @Test
+        void reencryptRejectsCiphertextFromAnotherContext() throws GeneralSecurityException {
+            String ciphertext = securityService.encrypt(CONTEXT, "123-45-6789");
+
+            assertThatThrownBy(() -> rotatedService.reencrypt(new EncryptionContext("other-tenant", "ssn"), ciphertext))
+                    .isInstanceOf(GeneralSecurityException.class);
+        }
+    }
+
+    private static SecurityService serviceFor(String keyset) {
+        return unchecked(() -> new SecurityService(Keysets.parse(keyset).getPrimitive(Aead.class)));
+    }
+
+    private static <T> T unchecked(Callable<T> call) {
         try {
-            return new SecurityService(TestKeysetConfig.newKeysetHandle().getPrimitive(Aead.class));
-        } catch (GeneralSecurityException e) {
+            return call.call();
+        } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }

@@ -4,10 +4,10 @@ import static dev.jaderss.encrypt.Samples.CONTEXT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.jaderss.encrypt.TestKeysetConfig;
-import dev.jaderss.encrypt.controller.DecryptRequest;
-import dev.jaderss.encrypt.controller.DecryptResponse;
-import dev.jaderss.encrypt.controller.EncryptRequest;
-import dev.jaderss.encrypt.controller.EncryptResponse;
+import dev.jaderss.encrypt.controller.CiphertextRequest;
+import dev.jaderss.encrypt.controller.CiphertextResponse;
+import dev.jaderss.encrypt.controller.PlaintextRequest;
+import dev.jaderss.encrypt.controller.PlaintextResponse;
 import dev.jaderss.encrypt.service.EncryptionContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,24 +36,40 @@ class EncryptionIntegrationTest {
     @ParameterizedTest
     @MethodSource("dev.jaderss.encrypt.Samples#plaintexts")
     void decryptRestoresPlaintextEncryptedOverHttp(String plaintext) {
-        ResponseEntity<EncryptResponse> encrypted =
-                post("/encrypt", new EncryptRequest(CONTEXT, plaintext), EncryptResponse.class);
+        ResponseEntity<CiphertextResponse> encrypted =
+                post("/encrypt", new PlaintextRequest(CONTEXT, plaintext), CiphertextResponse.class);
         assertThat(encrypted.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        ResponseEntity<DecryptResponse> decrypted =
-                post("/decrypt", new DecryptRequest(CONTEXT, encrypted.getBody().ciphertext()), DecryptResponse.class);
+        ResponseEntity<PlaintextResponse> decrypted = post(
+                "/decrypt", new CiphertextRequest(CONTEXT, encrypted.getBody().ciphertext()), PlaintextResponse.class);
         assertThat(decrypted.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(decrypted.getBody()).isEqualTo(new DecryptResponse(plaintext));
+        assertThat(decrypted.getBody()).isEqualTo(new PlaintextResponse(plaintext));
+    }
+
+    @Test
+    void reencryptReturnsNewCiphertextForSamePlaintext() {
+        String ciphertext = post("/encrypt", new PlaintextRequest(CONTEXT, "123-45-6789"), CiphertextResponse.class)
+                .getBody()
+                .ciphertext();
+
+        String reencrypted = post("/reencrypt", new CiphertextRequest(CONTEXT, ciphertext), CiphertextResponse.class)
+                .getBody()
+                .ciphertext();
+
+        assertThat(reencrypted).isNotEqualTo(ciphertext);
+        assertThat(post("/decrypt", new CiphertextRequest(CONTEXT, reencrypted), PlaintextResponse.class)
+                        .getBody())
+                .isEqualTo(new PlaintextResponse("123-45-6789"));
     }
 
     @Test
     void decryptFailsWhenCiphertextIsMovedToAnotherTenant() {
-        String ciphertext = post("/encrypt", new EncryptRequest(CONTEXT, "123-45-6789"), EncryptResponse.class)
+        String ciphertext = post("/encrypt", new PlaintextRequest(CONTEXT, "123-45-6789"), CiphertextResponse.class)
                 .getBody()
                 .ciphertext();
         EncryptionContext otherTenant = new EncryptionContext("other-tenant", CONTEXT.field());
 
-        assertThat(post("/decrypt", new DecryptRequest(otherTenant, ciphertext), String.class)
+        assertThat(post("/decrypt", new CiphertextRequest(otherTenant, ciphertext), String.class)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     }

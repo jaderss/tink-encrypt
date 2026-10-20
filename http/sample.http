@@ -17,3 +17,9 @@ POST http://localhost:8080/decrypt
 Content-Type: application/json
 
 {"context": {"tenantId": "globex", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}
+
+### Re-encrypt under the current primary key
+POST http://localhost:8080/reencrypt
+Content-Type: application/json
+
+{"context": {"tenantId": "acme", "field": "ssn"}, "ciphertext": "{{ciphertext}}"}

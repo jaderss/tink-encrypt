@@ -21,10 +21,10 @@ public class SecurityController {
     }
 
     @PostMapping("/encrypt")
-    public ResponseEntity<EncryptResponse> encrypt(@RequestBody EncryptRequest request) {
+    public ResponseEntity<CiphertextResponse> encrypt(@RequestBody PlaintextRequest request) {
         try {
             return ResponseEntity.ok(
-                    new EncryptResponse(securityService.encrypt(request.context(), request.plaintext())));
+                    new CiphertextResponse(securityService.encrypt(request.context(), request.plaintext())));
         } catch (GeneralSecurityException e) {
             log.error("Encryption failed", e);
             return ResponseEntity.internalServerError().build();
@@ -32,12 +32,23 @@ public class SecurityController {
     }
 
     @PostMapping("/decrypt")
-    public ResponseEntity<DecryptResponse> decrypt(@RequestBody DecryptRequest request) {
+    public ResponseEntity<PlaintextResponse> decrypt(@RequestBody CiphertextRequest request) {
         try {
             return ResponseEntity.ok(
-                    new DecryptResponse(securityService.decrypt(request.context(), request.ciphertext())));
+                    new PlaintextResponse(securityService.decrypt(request.context(), request.ciphertext())));
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/reencrypt")
+    public ResponseEntity<CiphertextResponse> reencrypt(@RequestBody CiphertextRequest request) {
+        try {
+            return ResponseEntity.ok(
+                    new CiphertextResponse(securityService.reencrypt(request.context(), request.ciphertext())));
+        } catch (GeneralSecurityException e) {
+            log.error("Re-encryption failed", e);
             return ResponseEntity.internalServerError().build();
         }
     }

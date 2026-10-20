@@ -29,4 +29,8 @@ public class SecurityService {
         byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(ciphertext), context.associatedData());
         return new String(plaintext, StandardCharsets.UTF_8);
     }
+
+    public String reencrypt(EncryptionContext context, String ciphertext) throws GeneralSecurityException {
+        return encrypt(context, decrypt(context, ciphertext));
+    }
 }

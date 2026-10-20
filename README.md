@@ -48,7 +48,7 @@ The application will start on `http://localhost:8080`
 The service reads a base64 Tink keyset from the `ENCRYPT_KEYSET` environment variable. It refuses to start without one. No keyset is committed to the repository.
 
 ```bash
-export ENCRYPT_KEYSET=$(scripts/new-keyset.sh)
+export ENCRYPT_KEYSET=$(scripts/keyset.sh new)
 ./mvnw spring-boot:run
 ```
 
@@ -90,6 +90,36 @@ curl -X POST http://localhost:8080/decrypt \
 
 The same ciphertext sent with `"tenantId":"globex"` or `"field":"email"` fails to decrypt.
 
+### Re-encrypt
+
+`POST /reencrypt` takes the same body as `/decrypt` and returns the ciphertext encrypted again under the current primary key. The plaintext never leaves the service.
+
+```bash
+curl -X POST http://localhost:8080/reencrypt \
+  -H "Content-Type: application/json" \
+  -d '{"context":{"tenantId":"acme","field":"ssn"},"ciphertext":"AYMGxMljOb4963+CwguDjHfkdwhGHiw/8kVeMNCYJ5gJZ55g16S+5cXZ4wA="}'
+```
+
+```json
+{"ciphertext":"..."}
+```
+
+## Key rotation
+
+A Tink keyset holds several keys. The primary key encrypts; every key in the set can decrypt, because each ciphertext starts with the id of the key that produced it. Rotation never breaks existing data.
+
+1. Add a new primary key and deploy it. Existing ciphertext keeps decrypting; new ciphertext uses the new key.
+   ```bash
+   export ENCRYPT_KEYSET=$(scripts/keyset.sh rotate)
+   ```
+2. Send every stored ciphertext through `POST /reencrypt` and save the result in place of the old value.
+3. Only after step 2 is complete, drop the old keys and deploy again. Any ciphertext that was not re-encrypted becomes unreadable.
+   ```bash
+   export ENCRYPT_KEYSET=$(scripts/keyset.sh retire)
+   ```
+
+`rotate` and `retire` read the current keyset from `ENCRYPT_KEYSET` and print the new one.
+
 ## Testing
 
 The project includes sample HTTP requests in `http/sample.http` that can be used with HTTP clients like IntelliJ IDEA, VS Code REST Client, or similar tools.
@@ -101,9 +131,9 @@ The project includes sample HTTP requests in `http/sample.http` that can be used
 
 ## Security Considerations
 
-- **Key Management**: The keyset comes from the `ENCRYPT_KEYSET` environment variable and is created offline with `scripts/new-keyset.sh`. The service never generates or returns keys over HTTP.
+- **Key Management**: The keyset comes from the `ENCRYPT_KEYSET` environment variable and is created and rotated offline with `scripts/keyset.sh`. The service never generates or returns keys over HTTP.
 - **HTTPS**: Always use HTTPS in production to protect data in transit.
-- **Key Rotation**: Regularly rotate encryption keys for enhanced security.
+- **Key Rotation**: See [Key rotation](#key-rotation). Old keys stay until every ciphertext is re-encrypted.
 - **Access Control**: Implement proper authentication and authorization for the API endpoints.
 
 ## Project Structure

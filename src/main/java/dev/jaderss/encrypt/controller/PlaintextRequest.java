@@ -3,10 +3,10 @@ package dev.jaderss.encrypt.controller;
 import dev.jaderss.encrypt.service.EncryptionContext;
 import java.util.Objects;
 
-public record DecryptRequest(EncryptionContext context, String ciphertext) {
+public record PlaintextRequest(EncryptionContext context, String plaintext) {
 
-    public DecryptRequest {
+    public PlaintextRequest {
         Objects.requireNonNull(context, "context");
-        Objects.requireNonNull(ciphertext, "ciphertext");
+        Objects.requireNonNull(plaintext, "plaintext");
     }
 }
