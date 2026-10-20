@@ -11,6 +11,7 @@ A Spring Boot REST API service for text encryption and decryption using Google T
 - **Per-tenant key derivation**: HKDF through the Java 25 KDF API
 - **Envelope encryption**: Keyset wrapped by an AWS KMS key under the `aws` profile
 - **Hybrid encryption**: HPKE public key for client-side encryption, exportable as PEM
+- **Fast startup**: Measured startup with the Java 25 AOT cache
 - **Secure**: Uses Google Tink cryptography library for robust security
 - **RESTful API**: Simple HTTP endpoints for easy integration
 - **Base64 Encoding**: All encrypted data is Base64 encoded for safe transmission
@@ -234,6 +235,29 @@ Tink has its own derivation primitive, `KeysetDeriver`, built on a PRF-based key
 | Dependency | None beyond the JDK | Tink |
 
 Use the JDK API when the derived key has to match a system outside Tink, when a protocol specifies HKDF directly, or when you want no crypto library at all. Use Tink's `KeysetDeriver` when the derived keys stay inside Tink, because you get key ids, rotation and Tink's safe defaults without writing the glue code this component needs.
+
+## Startup with the AOT cache
+
+Java 25 can build an ahead-of-time cache in one training run (JEP 514): `-XX:AOTCacheOutput` records which classes the application loads and links, and since JEP 515 also the method profiles gathered during that run. Later runs start from the cache instead of loading and linking those classes again.
+
+`scripts/startup-benchmark.sh` measures this. It builds the jar, extracts it with Spring Boot's `jarmode=tools` (a cache cannot map classes from nested fat-jar entries), trains the cache with `-Dspring.context.exit=onRefresh`, then starts each configuration ten times after one discarded warm-up and reports the median of the times Spring Boot logs. The AOT run uses `-XX:AOTMode=on`, so it fails rather than silently starting without the cache.
+
+Measured on 2026-10-20, Apple M4 Max, Temurin 25.0.4.1, Spring Boot 4.1.1, default profile:
+
+| Configuration | Context started | Process ready |
+|---|---|---|
+| Fat jar | 0.769 s | 0.967 s |
+| Extracted jar | 0.607 s | 0.728 s |
+| Extracted jar with AOT cache | 0.256 s | 0.338 s |
+
+A second full run landed within 1% of these numbers. With the cache the process is ready in about a third of the fat jar's time, and in less than half of the extracted jar's. The cache is 61 MB.
+
+What these numbers do not show: the training run stops once the context is refreshed, so the profiles cover startup only, not request handling, and nothing here measures throughput or peak performance. The cache is tied to the exact jar and JDK that built it and has to be regenerated whenever either changes, which belongs in the image build, not on a developer machine.
+
+```bash
+scripts/startup-benchmark.sh
+RUNS=20 scripts/startup-benchmark.sh
+```
 
 ## Testing
 
