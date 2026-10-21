@@ -46,8 +46,9 @@ class TenantKeyDerivationTest {
     @Test
     void tenantCannotDecryptAnotherTenantsCiphertext() throws GeneralSecurityException {
         byte[] ciphertext = derivation.aeadFor("acme").encrypt(PLAINTEXT, ASSOCIATED_DATA);
+        Aead otherTenant = derivation.aeadFor("globex");
 
-        assertThatThrownBy(() -> derivation.aeadFor("globex").decrypt(ciphertext, ASSOCIATED_DATA))
+        assertThatThrownBy(() -> otherTenant.decrypt(ciphertext, ASSOCIATED_DATA))
                 .isInstanceOf(GeneralSecurityException.class);
     }
 
