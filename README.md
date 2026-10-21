@@ -1,6 +1,6 @@
 # tink-encrypt
 
-[![CI](https://github.com/jaderss/tink-encrypt/actions/workflows/ci.yml/badge.svg)](https://github.com/jaderss/tink-encrypt/actions/workflows/ci.yml)
+[![CI](https://github.com/jaderss/tink-encrypt/actions/workflows/ci.yml/badge.svg)](https://github.com/jaderss/tink-encrypt/actions/workflows/ci.yml) [![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=jaderss_tink-encrypt&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=jaderss_tink-encrypt) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jaderss_tink-encrypt&metric=coverage)](https://sonarcloud.io/summary/new_code?id=jaderss_tink-encrypt)
 
 An encryption service for sensitive fields, such as SSNs and account numbers, built on Google Tink, Spring Boot 4.1 and Java 25. Callers send a value plus the tenant and field it belongs to; the service returns a ciphertext that only decrypts under that same tenant and field.
 
